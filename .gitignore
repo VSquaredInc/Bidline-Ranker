@@ -1,0 +1,12 @@
+# Bidline PDFs — personal documents, do not publish
+*.pdf
+
+# Source/helper files not needed by the app
+Other Bases/
+make_icon.py
+bidline_parser.py
+Atlas Pilot Globe.png
+
+# Python cache
+__pycache__/
+*.pyc

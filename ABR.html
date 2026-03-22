@@ -1,0 +1,2853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas Air Pilot Bidline Ranking Tool</title>
+
+    <!-- PWA manifest -->
+    <link rel="manifest" href="manifest.json">
+
+    <!-- iOS PWA support -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Bidline Ranker">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <!-- Android theme colour -->
+    <meta name="theme-color" content="#091d60">
+    <script src="pdf.min.js"></script>
+    <script src="pdf.worker.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --navy: #091d60;
+            --navy-dark: #05102e;
+            --navy-light: #0d2475;
+            --navy-lighter: #1a3a8f;
+            --gold: #ffb718;
+            --gold-light: #ffc84a;
+            --gold-dark: #e6a300;
+            --white: #ffffff;
+            --gray-100: #f4f6f8;
+            --gray-200: #e2e6eb;
+            --gray-300: #c5ccd6;
+            --gray-600: #8b9ab0;
+            --success: #22c55e;
+            --error: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(160deg, var(--navy-dark) 0%, var(--navy) 60%, var(--navy-light) 100%);
+            min-height: 100vh;
+            color: var(--white);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: #ffffff;
+            border-bottom: 4px solid var(--gold);
+            margin-bottom: 40px;
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .logo-img {
+            height: 52px;
+            width: auto;
+            display: block;
+        }
+
+        .header-divider {
+            width: 1px;
+            height: 40px;
+            background: #d0d8e4;
+            flex-shrink: 0;
+        }
+
+        .header-title h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--navy);
+            letter-spacing: -0.3px;
+        }
+
+        .subtitle {
+            color: #5a6978;
+            font-size: 13px;
+            margin-top: 3px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .card {
+            background: var(--navy-light);
+            border: 1px solid var(--navy-lighter);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--navy-lighter);
+        }
+
+        .step-number {
+            width: 32px;
+            height: 32px;
+            background: var(--gold);
+            color: var(--navy);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .upload-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--navy-lighter);
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--gold);
+            background: rgba(255, 183, 24, 0.06);
+        }
+
+        .upload-zone.dragover {
+            border-color: var(--gold);
+            background: rgba(255, 183, 24, 0.15);
+            transform: scale(1.02);
+        }
+
+        .upload-zone.has-file {
+            border-color: var(--success);
+            border-style: solid;
+            background: rgba(34, 197, 94, 0.1);
+        }
+
+        .upload-zone input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        .upload-icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+            pointer-events: none;
+        }
+
+        .upload-label {
+            font-weight: 500;
+            margin-bottom: 4px;
+            pointer-events: none;
+        }
+
+        .upload-hint {
+            font-size: 13px;
+            color: var(--gray-300);
+            pointer-events: none;
+        }
+
+        .upload-filename {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--success);
+            margin-top: 8px;
+            word-break: break-all;
+            pointer-events: none;
+        }
+
+        .preferences-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--gray-200);
+        }
+
+        .form-group input, .form-group select {
+            background: var(--navy);
+            border: 1px solid var(--navy-lighter);
+            border-radius: 6px;
+            padding: 12px 14px;
+            color: var(--white);
+            font-family: inherit;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--gold);
+        }
+
+        .form-hint {
+            font-size: 12px;
+            color: var(--gray-600);
+        }
+
+        .btn {
+            background: var(--gold);
+            color: var(--navy);
+            border: none;
+            border-radius: 8px;
+            padding: 14px 28px;
+            font-family: inherit;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background: var(--gold-light);
+            transform: translateY(-1px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: var(--navy-lighter);
+            color: var(--white);
+        }
+
+        .btn-secondary:hover {
+            background: var(--navy-lighter);
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .results-section {
+            display: none;
+        }
+
+        .results-section.visible {
+            display: block;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .results-stats {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--gold);
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: var(--gray-300);
+        }
+
+        .results-table-container {
+            overflow-x: auto;
+            border-radius: 8px;
+            border: 1px solid var(--navy-lighter);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            table-layout: fixed;
+        }
+
+        .results-table th {
+            background: var(--navy);
+            padding: 14px 8px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--gray-200);
+            white-space: normal;
+            word-wrap: break-word;
+            vertical-align: top;
+            position: sticky;
+            top: 0;
+        }
+
+        .results-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .results-table th.sortable:hover {
+            color: var(--gold);
+        }
+
+        .results-table th .sort-icon {
+            margin-left: 4px;
+            opacity: 0.5;
+        }
+
+        .results-table th.sorted .sort-icon {
+            opacity: 1;
+            color: var(--gold);
+        }
+
+        .results-table td {
+            padding: 12px 8px;
+            border-top: 1px solid var(--navy-lighter);
+            white-space: normal;
+            word-wrap: break-word;
+            overflow: hidden;
+            vertical-align: top;
+        }
+
+        .results-table tr:hover td {
+            background: rgba(255, 183, 24, 0.06);
+        }
+
+        .airports-cell {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--gray-300);
+        }
+
+        .trips-cell {
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 12px;
+            color: var(--gray-300);
+        }
+
+        .rank-badge {
+            background: var(--gold);
+            color: var(--navy);
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        .rank-badge.top-3 {
+            background: var(--gold);
+        }
+
+        .rank-badge.top-10 {
+            background: var(--gray-300);
+            color: var(--navy);
+        }
+
+        .rank-badge.other {
+            background: transparent;
+            border: 1px solid var(--gray-600);
+            color: var(--gray-300);
+        }
+
+        .line-type {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: var(--navy);
+            color: var(--gray-300);
+        }
+
+        .value-highlight {
+            font-family: 'IBM Plex Mono', monospace;
+            font-weight: 500;
+        }
+
+        .status-message {
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-message.visible {
+            display: block;
+        }
+
+        .status-message.error {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid var(--error);
+            color: #fca5a5;
+        }
+
+        .status-message.success {
+            background: rgba(34, 197, 94, 0.15);
+            border: 1px solid var(--success);
+            color: #86efac;
+        }
+
+        .status-message.info {
+            background: rgba(255, 183, 24, 0.15);
+            border: 1px solid var(--gold);
+            color: var(--gold-light);
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+
+        .loading.visible {
+            display: block;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--navy-lighter);
+            border-top-color: var(--gold);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--gray-600);
+            font-size: 13px;
+        }
+
+        @media (max-width: 640px) {
+            .container {
+                padding: 12px;
+            }
+
+            header {
+                padding: 24px 12px;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .card {
+                padding: 16px;
+            }
+
+            .upload-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .results-stats {
+                justify-content: center;
+            }
+        }
+
+        /* Calendar picker icon — make it visible on dark backgrounds */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: brightness(0) invert(1);
+            opacity: 0.7;
+            cursor: pointer;
+        }
+        input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+
+        /* Date Range Styles */
+        .date-ranges-section {
+            margin-bottom: 8px;
+        }
+
+        .section-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--gray-200);
+            margin-bottom: 12px;
+        }
+
+        #dateRangesContainer {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .date-range-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            padding: 16px;
+            background: var(--navy);
+            border-radius: 8px;
+            border: 1px solid var(--navy-lighter);
+        }
+
+        .date-range-inputs {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            flex: 1;
+            flex-wrap: wrap;
+        }
+
+        .date-range-inputs .form-group {
+            flex: 1;
+            min-width: 140px;
+        }
+
+        .date-range-separator {
+            color: var(--gray-300);
+            padding-bottom: 12px;
+            font-size: 14px;
+        }
+
+        .btn-remove-range {
+            background: transparent;
+            border: 1px solid var(--error);
+            color: var(--error);
+            width: 36px;
+            height: 36px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        }
+
+        .btn-remove-range:hover {
+            background: var(--error);
+            color: var(--white);
+        }
+
+        .btn-add-range {
+            background: transparent;
+            border: 1px dashed var(--navy-lighter);
+            color: var(--gray-300);
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+            margin-top: 12px;
+        }
+
+        .btn-add-range:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .btn-add-range span {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        @media (max-width: 640px) {
+            .date-range-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .date-range-inputs {
+                flex-direction: column;
+            }
+
+            .date-range-separator {
+                display: none;
+            }
+
+            .btn-remove-range {
+                align-self: flex-end;
+                margin-top: 8px;
+            }
+        }
+
+        /* Airport Preferences Styles */
+        .airport-preferences-section {
+            border-top: 1px solid var(--navy-lighter);
+            padding-top: 20px;
+        }
+
+        .airport-pref-row {
+            display: flex;
+            gap: 20px;
+            padding: 16px;
+            background: var(--navy);
+            border-radius: 8px;
+            border: 1px solid var(--navy-lighter);
+            margin-bottom: 12px;
+            flex-wrap: wrap;
+        }
+
+        .airport-pref-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .airport-pref-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--gray-200);
+            margin-bottom: 8px;
+        }
+
+        .airport-pref-group input[type="text"] {
+            width: 100%;
+            background: var(--navy-light);
+            border: 1px solid var(--navy-lighter);
+            border-radius: 6px;
+            padding: 10px 12px;
+            color: var(--white);
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 14px;
+            text-transform: uppercase;
+        }
+
+        .airport-pref-group input[type="text"]:focus {
+            outline: none;
+            border-color: var(--gold);
+        }
+
+        .airport-pref-group input[type="text"]::placeholder {
+            color: var(--gray-600);
+            text-transform: none;
+        }
+
+        .airport-pref-options {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 12px;
+            min-width: 200px;
+        }
+
+        .toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--gray-300);
+            cursor: pointer;
+        }
+
+        .toggle-label input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--gold);
+        }
+
+        .linetype-checks {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+
+        .linetype-checks label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+            color: var(--gray-300);
+            cursor: pointer;
+            font-weight: normal;
+        }
+
+        .linetype-checks input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            accent-color: var(--gold);
+            cursor: pointer;
+        }
+
+        .pref-adjustment {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--gray-300);
+        }
+
+        .pref-adjustment input[type="number"] {
+            width: 60px;
+            background: var(--navy-light);
+            border: 1px solid var(--navy-lighter);
+            border-radius: 4px;
+            padding: 6px 8px;
+            color: var(--white);
+            font-family: inherit;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .pref-adjustment input[type="number"]:focus {
+            outline: none;
+            border-color: var(--gold);
+        }
+
+        @media (max-width: 640px) {
+            .airport-pref-row {
+                flex-direction: column;
+            }
+
+            .airport-pref-options {
+                flex-direction: row;
+                flex-wrap: wrap;
+            }
+        }
+
+        /* ── Tooltips ── */
+        .label-row {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tooltip-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            background: rgba(255, 183, 24, 0.15);
+            border: 1px solid rgba(255, 183, 24, 0.4);
+            color: var(--gold);
+            font-size: 11px;
+            font-weight: 700;
+            font-style: normal;
+            cursor: pointer;
+            user-select: none;
+            flex-shrink: 0;
+            line-height: 1;
+            padding: 0;
+        }
+
+        .tooltip-icon:hover {
+            background: rgba(255, 183, 24, 0.3);
+        }
+
+        .tooltip-bubble {
+            display: none;
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 0;
+            z-index: 300;
+            background: var(--navy-light);
+            border: 1px solid var(--navy-lighter);
+            border-left: 3px solid var(--gold);
+            border-radius: 6px;
+            padding: 10px 14px;
+            font-size: 13px;
+            font-weight: 400;
+            color: var(--gray-200);
+            line-height: 1.5;
+            width: 270px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        .tooltip-bubble.active {
+            display: block;
+        }
+
+        /* Table-header tooltips: anchor to the th */
+        th .label-row {
+            display: inline-flex;
+        }
+
+        th .tooltip-bubble {
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: normal;
+        }
+
+        @media (max-width: 640px) {
+            .tooltip-bubble {
+                width: 220px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+        }
+
+        /* ── Help button ── */
+        .help-btn {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--navy);
+            color: var(--white);
+            border: 1px solid var(--navy-lighter);
+            border-radius: 6px;
+            padding: 8px 14px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .help-btn:hover {
+            background: var(--navy-light);
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        /* ── Help modal ── */
+        .help-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(5, 16, 46, 0.85);
+            z-index: 500;
+            overflow-y: auto;
+            padding: 24px 16px;
+        }
+
+        .help-overlay.active {
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+        }
+
+        .help-modal {
+            background: var(--navy-light);
+            border: 1px solid var(--navy-lighter);
+            border-top: 4px solid var(--gold);
+            border-radius: 12px;
+            width: 100%;
+            max-width: 720px;
+            padding: 32px;
+            position: relative;
+        }
+
+        .help-modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--navy-lighter);
+        }
+
+        .help-modal-header h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--white);
+        }
+
+        .help-close {
+            background: transparent;
+            border: 1px solid var(--navy-lighter);
+            color: var(--gray-300);
+            border-radius: 6px;
+            width: 36px;
+            height: 36px;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .help-close:hover {
+            border-color: var(--gold);
+            color: var(--gold);
+        }
+
+        .help-section {
+            margin-bottom: 28px;
+        }
+
+        .help-section h3 {
+            font-size: 14px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--gold);
+            margin-bottom: 12px;
+        }
+
+        .help-section p, .help-section li {
+            font-size: 14px;
+            color: var(--gray-200);
+            line-height: 1.6;
+            margin-bottom: 8px;
+        }
+
+        .help-section ul {
+            padding-left: 18px;
+        }
+
+        .help-section strong {
+            color: var(--white);
+        }
+
+        .help-formula {
+            background: var(--navy);
+            border: 1px solid var(--navy-lighter);
+            border-left: 3px solid var(--gold);
+            border-radius: 6px;
+            padding: 14px 16px;
+            font-family: 'IBM Plex Mono', monospace;
+            font-size: 13px;
+            color: var(--gold-light);
+            margin: 10px 0;
+            line-height: 1.7;
+        }
+
+        @media (max-width: 640px) {
+            .help-modal {
+                padding: 20px 16px;
+            }
+            .help-btn span {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-inner">
+                <img src="Atlas Air Worldwide Logo.png" alt="Atlas Air" class="logo-img">
+                <div class="header-divider"></div>
+                <div class="header-title">
+                    <h1>Pilot Bidline Ranking Tool</h1>
+                    <p class="subtitle">Prioritize your bid based on dates off, guarantee, and days off</p>
+                </div>
+                <button class="help-btn" onclick="openHelp()">
+                    <span>?</span> <span>How to Use</span>
+                </button>
+                <div class="header-divider"></div>
+                <img src="ibt.png" alt="IBT" class="logo-img">
+            </div>
+        </header>
+
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="step-number">1</div>
+                <h2 class="card-title">Upload Bid Documents</h2>
+            </div>
+            <div class="upload-grid">
+                <div class="upload-zone" id="bidlineZone">
+                    <input type="file" id="bidlineFile" accept=".pdf">
+                    <div class="upload-icon">📋</div>
+                    <div class="upload-label">Bidline Schedule</div>
+                    <div class="upload-hint">Must match your crew position (CA or FO)</div>
+                    <div class="upload-filename" id="bidlineFilename"></div>
+                </div>
+                <div class="upload-zone" id="creditMonth1Zone">
+                    <input type="file" id="creditMonth1File" accept=".pdf">
+                    <div class="upload-icon">💰</div>
+                    <div class="upload-label">Line Credit - Month 1 <span style="font-size:0.8em;opacity:0.7;">(Optional)</span></div>
+                    <div class="upload-hint">e.g., 747_Lines_Feb26-Feb26_Period.pdf</div>
+                    <div class="upload-filename" id="creditMonth1Filename"></div>
+                </div>
+                <div class="upload-zone" id="creditMonth2Zone">
+                    <input type="file" id="creditMonth2File" accept=".pdf">
+                    <div class="upload-icon">💰</div>
+                    <div class="upload-label">Line Credit - Month 2 <span style="font-size:0.8em;opacity:0.7;">(Optional)</span></div>
+                    <div class="upload-hint">e.g., 747_Lines_Feb26-Mar26_Period.pdf</div>
+                    <div class="upload-filename" id="creditMonth2Filename"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="step-number">2</div>
+                <h2 class="card-title">Set Your Preferences</h2>
+            </div>
+            
+            <div class="date-ranges-section">
+                <div class="label-row" style="margin-bottom:12px;">
+                    <label class="section-label" style="margin-bottom:0;">Dates Desired Off</label>
+                    <button class="tooltip-icon" onclick="toggleTooltip('tt-dates')" aria-label="Help">i</button>
+                    <span class="tooltip-bubble" id="tt-dates">Enter the dates you want off. Only lines where <strong>every</strong> requested date is an off day will appear in results. Add multiple ranges for non-consecutive dates.</span>
+                </div>
+                <div id="dateRangesContainer">
+                    <div class="date-range-row" data-range-id="1">
+                        <div class="date-range-inputs">
+                            <div class="form-group">
+                                <label>Start</label>
+                                <input type="date" class="range-start" id="startDate1">
+                            </div>
+                            <span class="date-range-separator">to</span>
+                            <div class="form-group">
+                                <label>End</label>
+                                <input type="date" class="range-end" id="endDate1">
+                            </div>
+                        </div>
+                        <button type="button" class="btn-remove-range" onclick="removeDateRange(1)" title="Remove this date range" style="visibility: hidden;">✕</button>
+                    </div>
+                </div>
+                <button type="button" class="btn-add-range" onclick="addDateRange()">
+                    <span>+</span> Add Another Date Range
+                </button>
+            </div>
+
+            <div class="preferences-grid" style="margin-top: 24px;">
+                <div class="form-group">
+                    <div class="label-row">
+                        <label for="timeMultiplier">Time Multiplier</label>
+                        <button class="tooltip-icon" onclick="toggleTooltip('tt-multiplier')" aria-label="Help">i</button>
+                        <span class="tooltip-bubble" id="tt-multiplier">Adjusts how much days off are worth relative to guarantee hours. At <strong>1.0</strong>, each day off is valued at its CRT equivalent of <strong>4.85 credit hours</strong>. Raise above 1.0 to reflect overtime expectations — 1.41 approximates picking up one overtime day per period (~6.85 hrs/day), 1.82 approximates two overtime days (~8.85 hrs/day). Lower below 1.0 to rank guarantee pay higher than days off.</span>
+                    </div>
+                    <input type="number" id="timeMultiplier" value="1.0" min="0" max="5" step="0.1">
+                    <div class="form-hint">1.0 = 4.85 hrs/day (CRT rate); &gt;1 = prefer days off; &lt;1 = prefer guarantee</div>
+                </div>
+                <div class="form-group">
+                    <div class="label-row">
+                        <label for="lineTypeFilter">Line Type Filter</label>
+                        <button class="tooltip-icon" onclick="toggleTooltip('tt-linetype')" aria-label="Help">i</button>
+                        <span class="tooltip-bubble" id="tt-linetype">Primary lines are the lines you can hold based on seniority. Secondary lines are fallback holds; Reserve lines are on-call. Use <strong>Primary Only</strong> for the most relevant results, or broaden as needed.</span>
+                    </div>
+                    <div class="linetype-checks">
+                        <label><input type="checkbox" id="filterPrimary" checked> Primary</label>
+                        <label><input type="checkbox" id="filterSecondary" checked> Secondary</label>
+                        <label><input type="checkbox" id="filterReserve" checked> Reserve</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="label-row">
+                        <label for="lineDurationFilter">Line Duration Filter</label>
+                        <button class="tooltip-icon" onclick="toggleTooltip('tt-duration')" aria-label="Help">i</button>
+                        <span class="tooltip-bubble" id="tt-duration"><strong>Bid Period 1</strong> lines cover a single bid period (one month for Apr–Dec; adjusted periods for Jan–Mar). <strong>Bid Period 2</strong> lines span two consecutive bid periods. Guarantee and days off are averaged per period so both types are directly comparable in the rankings.</span>
+                    </div>
+                    <select id="lineDurationFilter">
+                        <option value="all">Both Bid Periods</option>
+                        <option value="bp1">Bid Period 1 Only</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="airport-preferences-section" style="margin-top: 24px;">
+                <label class="section-label">Airport Preferences</label>
+                
+                <div class="airport-pref-row">
+                    <div class="airport-pref-group">
+                        <div class="label-row">
+                            <label for="whitelistAirports">Preferred Airports (Whitelist)</label>
+                            <button class="tooltip-icon" onclick="toggleTooltip('tt-whitelist')" aria-label="Help">i</button>
+                            <span class="tooltip-bubble" id="tt-whitelist">Lines visiting any of these airports score higher. Check <strong>Absolute</strong> to exclude lines that don't visit at least one of these airports entirely.</span>
+                        </div>
+                        <input type="text" id="whitelistAirports" placeholder="e.g., ICN, NRT, HKG">
+                        <div class="form-hint">Comma-separated 3-letter codes. Lines visiting ANY of these score higher.</div>
+                    </div>
+                    <div class="airport-pref-options">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="whitelistAbsolute">
+                            <span>Absolute (exclude lines without these)</span>
+                        </label>
+                        <div class="pref-adjustment" id="whitelistAdjustment">
+                            <label>Bonus:</label>
+                            <input type="number" id="whitelistPercent" value="10" min="0" max="100" step="1">
+                            <span>%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="airport-pref-row">
+                    <div class="airport-pref-group">
+                        <div class="label-row">
+                            <label for="blacklistAirports">Avoid Airports (Blacklist)</label>
+                            <button class="tooltip-icon" onclick="toggleTooltip('tt-blacklist')" aria-label="Help">i</button>
+                            <span class="tooltip-bubble" id="tt-blacklist">Lines visiting any of these airports score lower. Check <strong>Absolute</strong> to completely exclude lines that visit any of these airports.</span>
+                        </div>
+                        <input type="text" id="blacklistAirports" placeholder="e.g., FRA, LGG">
+                        <div class="form-hint">Comma-separated 3-letter codes. Lines visiting ANY of these score lower.</div>
+                    </div>
+                    <div class="airport-pref-options">
+                        <label class="toggle-label">
+                            <input type="checkbox" id="blacklistAbsolute">
+                            <span>Absolute (exclude lines with these)</span>
+                        </label>
+                        <div class="pref-adjustment" id="blacklistAdjustment">
+                            <label>Penalty:</label>
+                            <input type="number" id="blacklistPercent" value="10" min="0" max="100" step="1">
+                            <span>%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="step-number">3</div>
+                <h2 class="card-title">Generate Rankings</h2>
+            </div>
+            <div class="action-bar">
+                <button class="btn" id="processBtn" onclick="processDocuments()">
+                    <span>⚡</span> Calculate Rankings
+                </button>
+                <button class="btn btn-secondary" id="exportBtn" onclick="exportResults()" style="display: none;">
+                    <span>📥</span> Export CSV
+                </button>
+            </div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Processing documents...</p>
+        </div>
+
+        <div class="results-section" id="resultsSection">
+            <div class="card">
+                <div class="results-header">
+                    <div>
+                        <h2 class="card-title">Ranked Bidlines</h2>
+                        <p id="resultsContext" style="font-size:13px; color:var(--gold); margin-top:4px;"></p>
+                    </div>
+                    <div class="results-stats">
+                        <div class="stat">
+                            <div class="stat-value" id="totalCompatible">0</div>
+                            <div class="stat-label">Compatible Lines</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value" id="totalExcluded">0</div>
+                            <div class="stat-label">Excluded</div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-value" id="topValue">0</div>
+                            <div class="stat-label">Top Effective Value</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="results-table-container">
+                    <table class="results-table">
+                        <colgroup>
+                            <col style="width:5%">   <!-- Rank -->
+                            <col style="width:6%">   <!-- Line # -->
+                            <col style="width:12%">  <!-- Type -->
+                            <col style="width:8%">   <!-- Guarantee -->
+                            <col style="width:6%">   <!-- Days Off -->
+                            <col style="width:9%">   <!-- Effective Value -->
+                            <col style="width:6%">   <!-- Front DH -->
+                            <col style="width:6%">   <!-- Back DH -->
+                            <col style="width:19%">  <!-- Trips -->
+                            <col style="width:23%">  <!-- Airports -->
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th class="sortable" data-sort="line">Line #</th>
+                                <th>Type</th>
+                                <th class="sortable" data-sort="guarantee">Avg Guarantee (hrs)</th>
+                                <th class="sortable" data-sort="daysOff">Avg Days Off</th>
+                                <th class="sortable" data-sort="effectiveValue">
+                                    <div class="label-row">Eff. Value
+                                        <button class="tooltip-icon" onclick="toggleTooltip('tt-effval'); event.stopPropagation();" aria-label="Help">i</button>
+                                        <span class="tooltip-bubble" id="tt-effval">Composite ranking score.<br><strong>Avg Guarantee + (Avg Days Off × 4.85 × Time Multiplier)</strong><br>Airport preferences apply a bonus or penalty on top.</span>
+                                    </div>
+                                </th>
+                                <th class="sortable" data-sort="frontDH">
+                                    <div class="label-row">Front DH
+                                        <button class="tooltip-icon" onclick="toggleTooltip('tt-frontdh'); event.stopPropagation();" aria-label="Help">i</button>
+                                        <span class="tooltip-bubble" id="tt-frontdh">Number of trips where you deadhead commercially <strong>from base</strong> to start the pairing (e.g., ORD → ANC on a commercial flight before the trip begins).</span>
+                                    </div>
+                                </th>
+                                <th class="sortable" data-sort="backDH">
+                                    <div class="label-row">Back DH
+                                        <button class="tooltip-icon" onclick="toggleTooltip('tt-backdh'); event.stopPropagation();" aria-label="Help">i</button>
+                                        <span class="tooltip-bubble" id="tt-backdh">Number of trips where you deadhead commercially <strong>to base</strong> to end the pairing (e.g., ANC → ORD on a commercial flight after the trip ends).</span>
+                                    </div>
+                                </th>
+                                <th>Trips</th>
+                                <th>Airports</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Atlas Air Pilot Bidline Ranking Tool</p>
+            <p style="margin-top: 6px;">Developed by <strong>Christopher Haines</strong> &mdash; <a href="mailto:hainesusa@gmail.com" style="color: var(--gold); text-decoration: none;">hainesusa@gmail.com</a></p>
+            <p style="margin-top: 4px; font-size: 12px; opacity: 0.6;">V<sup>2</sup> &mdash; Vision Vector Inc.</p>
+        </footer>
+    </div>
+
+    <!-- Help Modal -->
+    <div class="help-overlay" id="helpOverlay" onclick="overlayClick(event)">
+        <div class="help-modal" role="dialog" aria-modal="true" aria-label="How to Use">
+            <div class="help-modal-header">
+                <h2>How to Use This Tool</h2>
+                <button class="help-close" onclick="closeHelp()" aria-label="Close">✕</button>
+            </div>
+
+            <div class="help-section">
+                <h3>Overview</h3>
+                <p>This tool reads your Atlas Air bid documents and ranks every eligible bidline based on your personal preferences — desired days off, pay guarantee, and destination airports. The highest-ranked line is the best match for what you've told it matters most.</p>
+            </div>
+
+            <div class="help-section">
+                <h3>Step 1 — The Three PDFs</h3>
+                <ul>
+                    <li><strong>Bidline Schedule</strong> — The published bidline PDF from AIMS (e.g., <em>April 2026 Bidlines ORD 747 FO.pdf</em>). Contains the full schedule grid: days off (X markers), trip codes, departure airports, and deadhead legs for every line. <strong>Make sure you use the file for your crew position</strong> — CA and FO bidlines are separate documents.</li>
+                    <li><strong>Line Credit – Month 1</strong> — The <em>single-month</em> credit value report (e.g., <em>747 Lines Apr26–Apr26 Period.pdf</em>). Contains guarantee hours, TAFB, and days off per line for the first month.</li>
+                    <li><strong>Line Credit – Month 2</strong> — The <em>two-month cumulative</em> credit value report (e.g., <em>747 Lines Apr26–May26 Period.pdf</em>). Required to correctly average guarantee values for Bid Period 2 lines. If you are bidding a single bid period, upload the same single-month report here.</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>Step 2 — Preferences</h3>
+                <ul>
+                    <li><strong>Dates Desired Off</strong> — Enter the dates you want off. Only lines where <em>every</em> requested date is an off day (or falls after the line's schedule end) will appear in results. You can add multiple ranges.</li>
+                    <li><strong>Time Multiplier</strong> — Controls how much weight days off carry in the ranking score relative to guarantee hours. At 1.0, each day off is valued at its CRT rate of 4.85 credit hours (no overtime assumed). Raise it to reflect overtime expectations: 1.41 approximates picking up one overtime day per bid period (~6.85 hrs/day effective), 1.82 approximates two overtime days (~8.85 hrs/day). Lower it below 1.0 to rank guarantee pay higher than days off.</li>
+                    <li><strong>Line Type Filter</strong> — Primary lines are the lines you can hold based on seniority; Secondary lines are fallback holds; Reserve lines are on-call. Line subtypes are Int (International), AdH (Ad-Hoc), and 60-day variants of each. Filter to <em>Primary Only</em> for the most relevant results, or use <em>Primary &amp; Secondary</em> to exclude reserve.</li>
+                    <li><strong>Line Duration Filter</strong> — Bid Period 1 lines cover a single bid period; Bid Period 2 lines span two consecutive bid periods. Filter if you want to compare only one type.</li>
+                    <li><strong>Airport Preferences</strong> — Enter airports you prefer or want to avoid (comma-separated IATA codes). A non-absolute preference applies a percentage bonus or penalty to Effective Value. Checking <em>Absolute</em> completely excludes lines that don't meet the criteria.</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>Understanding the Results</h3>
+                <ul>
+                    <li><strong>Eff. Value</strong> — The composite score used for ranking. Higher is better.</li>
+                    <li><strong>Avg Guarantee / Avg Days Off</strong> — Both are averaged to represent a single bid period, so Bid Period 1 and Bid Period 2 lines are directly comparable.</li>
+                    <li><strong>Front DH</strong> — Number of trips where you deadhead commercially <em>from</em> base to start the pairing.</li>
+                    <li><strong>Back DH</strong> — Number of trips where you deadhead commercially <em>to</em> base to end the pairing.</li>
+                    <li><strong>Trips</strong> — Date ranges of each trip pairing in the bid period.</li>
+                    <li><strong>Airports</strong> — All airports visited during the bid period.</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>Scoring Formula</h3>
+                <div class="help-formula">
+Effective Value = Avg Guarantee + (Avg Days Off × 4.85 × Time Multiplier)
+
+Airport whitelist bonus:  Effective Value × (1 + Bonus% / 100)
+Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
+                </div>
+                <p>Both Avg Guarantee and Avg Days Off are averaged across bid periods so Bid Period 1 and Bid Period 2 lines are directly comparable.</p>
+                <p>Example: a line with 75 hrs guarantee, 12 days off, and Time Multiplier 1.2 scores:<br>
+                75 + (12 × 4.85 × 1.2) = 75 + 69.84 = <strong>144.84</strong></p>
+                <p>Time Multiplier guidance: 1.0 = pure CRT value (4.85 hrs/day); 1.41 ≈ one overtime day per period; 1.82 ≈ two overtime days per period.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configure PDF.js - use inline worker to avoid fake worker warning
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+        
+        // Suppress font warnings (TT: undefined function errors)
+        const originalConsoleWarn = console.warn;
+        console.warn = function(...args) {
+            if (args[0] && typeof args[0] === 'string' && 
+                (args[0].includes('TT: undefined function') || 
+                 args[0].includes('Setting up fake worker'))) {
+                return; // Suppress these specific warnings
+            }
+            originalConsoleWarn.apply(console, args);
+        };
+
+        // Global state
+        let bidlineData = null;
+        let creditMonth1Data = null;
+        let creditMonth2Data = null;
+        let rankedResults = [];
+        let lastDateRanges = [];
+        let lastDesiredDates = [];
+        let nextRangeId = 2; // Start at 2 since we have range 1 already
+        let bidPeriodStart = null; // Set when bidline PDF is processed; drives calendar open month
+
+        // Format a Date as YYYY-MM-DD for input[type=date]
+        function toISODate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        // Wire up calendar-open-month behaviour for a start/end input pair.
+        // Start opens to bid period start (or current month if not yet known).
+        // End opens to whatever date is in the start field.
+        // If the user dismisses without picking, the programmatically-set value is cleared.
+        function setupDateRangeInputs(startEl, endEl) {
+            function defaultStartValue() {
+                if (bidPeriodStart) return toISODate(bidPeriodStart);
+                const now = new Date();
+                return toISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+            }
+
+            startEl.addEventListener('focus', function() {
+                if (!this.value) {
+                    this.value = defaultStartValue();
+                    this.dataset.programmatic = '1';
+                }
+            });
+            startEl.addEventListener('change', function() {
+                delete this.dataset.programmatic;
+            });
+            startEl.addEventListener('blur', function() {
+                if (this.dataset.programmatic) {
+                    this.value = '';
+                    delete this.dataset.programmatic;
+                }
+            });
+
+            endEl.addEventListener('focus', function() {
+                if (!this.value && startEl.value) {
+                    this.value = startEl.value;
+                    this.dataset.programmatic = '1';
+                }
+            });
+            endEl.addEventListener('change', function() {
+                delete this.dataset.programmatic;
+            });
+            endEl.addEventListener('blur', function() {
+                if (this.dataset.programmatic) {
+                    this.value = '';
+                    delete this.dataset.programmatic;
+                }
+            });
+        }
+
+        // Date range management
+        function addDateRange() {
+            const container = document.getElementById('dateRangesContainer');
+            const rangeId = nextRangeId++;
+            
+            const rangeRow = document.createElement('div');
+            rangeRow.className = 'date-range-row';
+            rangeRow.dataset.rangeId = rangeId;
+            
+            rangeRow.innerHTML = `
+                <div class="date-range-inputs">
+                    <div class="form-group">
+                        <label>Start</label>
+                        <input type="date" class="range-start" id="startDate${rangeId}">
+                    </div>
+                    <span class="date-range-separator">to</span>
+                    <div class="form-group">
+                        <label>End</label>
+                        <input type="date" class="range-end" id="endDate${rangeId}">
+                    </div>
+                </div>
+                <button type="button" class="btn-remove-range" onclick="removeDateRange(${rangeId})" title="Remove this date range">✕</button>
+            `;
+            
+            container.appendChild(rangeRow);
+            updateRemoveButtons();
+            setupDateRangeInputs(
+                rangeRow.querySelector('.range-start'),
+                rangeRow.querySelector('.range-end')
+            );
+        }
+
+        function removeDateRange(rangeId) {
+            const rangeRow = document.querySelector(`.date-range-row[data-range-id="${rangeId}"]`);
+            if (rangeRow) {
+                rangeRow.remove();
+                updateRemoveButtons();
+            }
+        }
+
+        function updateRemoveButtons() {
+            const rows = document.querySelectorAll('.date-range-row');
+            rows.forEach((row, index) => {
+                const removeBtn = row.querySelector('.btn-remove-range');
+                if (removeBtn) {
+                    // Hide remove button if only one range remains
+                    removeBtn.style.visibility = rows.length === 1 ? 'hidden' : 'visible';
+                }
+            });
+        }
+
+        function getDateRanges() {
+            const ranges = [];
+            const rows = document.querySelectorAll('.date-range-row');
+            
+            rows.forEach(row => {
+                const startInput = row.querySelector('.range-start');
+                const endInput = row.querySelector('.range-end');
+                
+                if (startInput && endInput && startInput.value && endInput.value) {
+                    const start = new Date(startInput.value + 'T00:00:00');
+                    const end = new Date(endInput.value + 'T00:00:00');
+                    
+                    if (end >= start) {
+                        ranges.push({ start, end });
+                    }
+                }
+            });
+            
+            return ranges;
+        }
+
+        function getAllDesiredDates(ranges) {
+            const allDates = [];
+            
+            for (const range of ranges) {
+                const currentDate = new Date(range.start);
+                while (currentDate <= range.end) {
+                    allDates.push(new Date(currentDate));
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+            }
+            
+            return allDates;
+        }
+
+        function parseAirportList(inputId) {
+            const input = document.getElementById(inputId);
+            if (!input || !input.value.trim()) return [];
+            
+            return input.value
+                .toUpperCase()
+                .split(/[,\s]+/)
+                .map(s => s.trim())
+                .filter(s => /^[A-Z]{3}$/.test(s));
+        }
+
+        function getAirportPreferences() {
+            return {
+                whitelist: {
+                    airports: parseAirportList('whitelistAirports'),
+                    absolute: document.getElementById('whitelistAbsolute').checked,
+                    percent: parseFloat(document.getElementById('whitelistPercent').value) || 10
+                },
+                blacklist: {
+                    airports: parseAirportList('blacklistAirports'),
+                    absolute: document.getElementById('blacklistAbsolute').checked,
+                    percent: parseFloat(document.getElementById('blacklistPercent').value) || 10
+                }
+            };
+        }
+
+        // Toggle percentage input visibility based on absolute checkbox
+        document.addEventListener('DOMContentLoaded', function() {
+            // Prevent default drag behavior on document (so files don't open in browser)
+            document.addEventListener('dragover', (e) => e.preventDefault());
+            document.addEventListener('drop', (e) => e.preventDefault());
+            
+            const whitelistAbsolute = document.getElementById('whitelistAbsolute');
+            const blacklistAbsolute = document.getElementById('blacklistAbsolute');
+            const whitelistAdjustment = document.getElementById('whitelistAdjustment');
+            const blacklistAdjustment = document.getElementById('blacklistAdjustment');
+
+            function updateAdjustmentVisibility() {
+                if (whitelistAdjustment) {
+                    whitelistAdjustment.style.opacity = whitelistAbsolute.checked ? '0.3' : '1';
+                    whitelistAdjustment.querySelector('input').disabled = whitelistAbsolute.checked;
+                }
+                if (blacklistAdjustment) {
+                    blacklistAdjustment.style.opacity = blacklistAbsolute.checked ? '0.3' : '1';
+                    blacklistAdjustment.querySelector('input').disabled = blacklistAbsolute.checked;
+                }
+            }
+
+            if (whitelistAbsolute) whitelistAbsolute.addEventListener('change', updateAdjustmentVisibility);
+            if (blacklistAbsolute) blacklistAbsolute.addEventListener('change', updateAdjustmentVisibility);
+        });
+
+        // File upload handlers
+        document.querySelectorAll('.upload-zone input').forEach(input => {
+            input.addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                const zone = this.parentElement;
+                const filenameEl = zone.querySelector('.upload-filename');
+                
+                if (file) {
+                    zone.classList.add('has-file');
+                    filenameEl.textContent = file.name;
+                } else {
+                    zone.classList.remove('has-file');
+                    filenameEl.textContent = '';
+                }
+            });
+        });
+
+        // Drag and drop handlers
+        document.querySelectorAll('.upload-zone').forEach(zone => {
+            const input = zone.querySelector('input');
+            const filenameEl = zone.querySelector('.upload-filename');
+            
+            zone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.add('dragover');
+            });
+            
+            zone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove('dragover');
+            });
+            
+            zone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                zone.classList.remove('dragover');
+                
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].type === 'application/pdf') {
+                    // Create a new FileList-like object
+                    const dataTransfer = new DataTransfer();
+                    dataTransfer.items.add(files[0]);
+                    input.files = dataTransfer.files;
+                    
+                    // Trigger change event
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                } else {
+                    showStatus('Please drop a PDF file', 'error');
+                }
+            });
+            
+            // Also handle click on the zone itself
+            zone.addEventListener('click', (e) => {
+                if (e.target === zone || e.target.classList.contains('upload-icon') || 
+                    e.target.classList.contains('upload-label') || e.target.classList.contains('upload-hint')) {
+                    input.click();
+                }
+            });
+        });
+
+        // Show status message
+        function showStatus(message, type = 'info') {
+            const el = document.getElementById('statusMessage');
+            el.textContent = message;
+            el.className = `status-message visible ${type}`;
+            if (type === 'success') {
+                setTimeout(() => el.classList.remove('visible'), 5000);
+            }
+        }
+
+        function hideStatus() {
+            document.getElementById('statusMessage').classList.remove('visible');
+        }
+
+        // Extract text from PDF
+        async function extractTextFromPDF(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let fullText = '';
+            
+            for (let i = 1; i <= pdf.numPages; i++) {
+                const page = await pdf.getPage(i);
+                const textContent = await page.getTextContent();
+                
+                // Sort items by Y position (descending, since PDF Y is bottom-up) then X
+                const items = textContent.items.slice().sort((a, b) => {
+                    const yDiff = b.transform[5] - a.transform[5];
+                    if (Math.abs(yDiff) > 3) return yDiff; // Different lines
+                    return a.transform[4] - b.transform[4]; // Same line, sort by X
+                });
+                
+                // Group by line (similar Y positions)
+                let lastY = null;
+                let pageText = '';
+                
+                for (const item of items) {
+                    const y = item.transform[5];
+                    if (lastY !== null && Math.abs(y - lastY) > 3) {
+                        pageText += '\n'; // New line
+                    } else if (pageText.length > 0 && !pageText.endsWith('\n')) {
+                        pageText += ' '; // Same line, add space
+                    }
+                    pageText += item.str;
+                    lastY = y;
+                }
+                
+                fullText += pageText + '\n';
+            }
+            
+            return fullText;
+        }
+
+        // Parse bidline schedule to extract days off for each line
+        function parseBidlineSchedule(text) {
+            const lines = {};
+            const datePattern = /([A-Z][a-z]{2})(\d{1,2})/g;
+            
+            // Find all dates in header - looking for patterns like "Jan31", "Feb01", etc.
+            const headerMatch = text.match(/Jan\d{1,2}|Feb\d{1,2}|Mar\d{1,2}|Apr\d{1,2}|May\d{1,2}|Jun\d{1,2}|Jul\d{1,2}|Aug\d{1,2}|Sep\d{1,2}|Oct\d{1,2}|Nov\d{1,2}|Dec\d{1,2}/g);
+            
+            if (!headerMatch) {
+                console.error('Could not find date headers');
+                return lines;
+            }
+
+            // Get unique dates in order (they repeat on each page)
+            const uniqueDates = [];
+            const seenDates = new Set();
+            for (const d of headerMatch) {
+                if (!seenDates.has(d)) {
+                    seenDates.add(d);
+                    uniqueDates.push(d);
+                }
+                if (uniqueDates.length >= 31) break; // Max days in bid period
+            }
+
+            // Parse the year from the document
+            const yearMatch = text.match(/SCHEDULE FROM\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
+            const baseYear = yearMatch ? parseInt(yearMatch[3]) : 2026;
+
+            // Convert date strings to Date objects
+            const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 
+                              'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+            
+            const dateObjects = uniqueDates.map(d => {
+                const month = d.substring(0, 3);
+                const day = parseInt(d.substring(3));
+                let year = baseYear;
+                // Handle year rollover
+                if (monthMap[month] === 0 && uniqueDates.some(ud => ud.startsWith('Dec'))) {
+                    year = baseYear; // January of current period
+                }
+                return new Date(year, monthMap[month], day);
+            });
+
+            // Find bidline blocks - look for 4-digit line numbers
+            const linePattern = /(\d{4})\s+(Primary|Secondary|Reserve)\s+(Int|AdH|60-day\s+Int|60-day\s+AdH)/gi;
+            let match;
+            
+            // Create a more detailed parsing approach
+            // Split by line separator patterns
+            const blocks = text.split(/_{20,}/);
+            
+            for (const block of blocks) {
+                // Look for line number pattern
+                const lineMatch = block.match(/(\d{4})\s+(Primary|Secondary|Reserve)/i);
+                if (!lineMatch) continue;
+                
+                const lineNum = lineMatch[1];
+                
+                // Determine line type
+                let lineType = lineMatch[2];
+                if (block.includes('60-day')) {
+                    lineType += ' 60-day';
+                }
+                if (block.match(/\bInt\b/i)) {
+                    lineType += ' Int';
+                } else if (block.match(/\bAdH\b/i)) {
+                    lineType += ' AdH';
+                }
+                
+                // Find days off - count X markers
+                // Look for DaysOFF pattern
+                const daysOffMatch = block.match(/DaysOFF>\s*(\d+)/);
+                const daysOffCount = daysOffMatch ? parseInt(daysOffMatch[1]) : 0;
+                
+                // Determine which specific dates are off
+                // This is complex due to the multi-line format
+                // We'll use the presence of 'X' markers in appropriate positions
+                const datesOff = [];
+                
+                // Find the first line of the block which contains the date markers
+                const firstLineMatch = block.match(/ORD\s+744\s+FO\s+(.+)/);
+                if (firstLineMatch) {
+                    const dateLineContent = firstLineMatch[1];
+                    
+                    // Split by whitespace and analyze each cell
+                    const cells = dateLineContent.split(/\s+/).filter(c => c.length > 0);
+                    
+                    // Map cells to dates - cells contain either X (day off), WORK, or trip info
+                    for (let i = 0; i < Math.min(cells.length, dateObjects.length); i++) {
+                        const cell = cells[i];
+                        if (cell === 'X') {
+                            datesOff.push(dateObjects[i]);
+                        }
+                    }
+                }
+                
+                lines[lineNum] = {
+                    lineNum,
+                    lineType: lineType.trim(),
+                    daysOffCount,
+                    datesOff
+                };
+            }
+            
+            return { lines, dateObjects };
+        }
+
+        // Parse bidline by analyzing text positions carefully
+        async function parseBidlineWithPositions(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            
+            const lines = {};
+            const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
+                              'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
+            
+            // Determine base year from first page
+            let baseYear = 2026;
+            let baseAirport  = 'ORD';
+            let aircraftType = '';
+            let crewPosition = '';
+
+            for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+                const items = textContent.items;
+                
+                // Get full page text to detect schedule period
+                const fullPageText = items.map(item => item.str).join(' ');
+                
+                // Detect schedule period end date from header
+                // Look for "CREW SCHEDULE FROM :MM/DD/YYYY TO MM/DD/YYYY"
+                let pageScheduleEnd = new Date(2026, 4, 1); // Default to May 1, 2026
+                const periodMatch = fullPageText.match(/CREW SCHEDULE FROM\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})\s+TO\s+(\d{2})\/(\d{2})\/(\d{4})/);
+                if (periodMatch) {
+                    const endMonth = parseInt(periodMatch[4]) - 1; // JS months are 0-indexed
+                    const endDay = parseInt(periodMatch[5]);
+                    const endYear = parseInt(periodMatch[6]);
+                    pageScheduleEnd = new Date(endYear, endMonth, endDay);
+                    // Capture bid period start from the first page that has a match
+                    if (!bidPeriodStart) {
+                        bidPeriodStart = new Date(parseInt(periodMatch[3]), parseInt(periodMatch[1]) - 1, parseInt(periodMatch[2]));
+                    }
+                    if (pageNum <= 3 || pageNum === 30) {
+                        console.log(`Page ${pageNum}: Detected schedule end = ${pageScheduleEnd.toDateString()}`);
+                    }
+                } else {
+                    if (pageNum <= 3) {
+                        console.log(`Page ${pageNum}: No schedule period match found. Sample text:`, fullPageText.substring(0, 200));
+                    }
+                }
+
+                // Extract base airport, aircraft type, and crew position from page header
+                const baseAptMatch = fullPageText.match(/\b([A-Z]{3})\s+(7\d{2})\s+(FO|CA)\b/);
+                if (baseAptMatch) {
+                    baseAirport  = baseAptMatch[1];
+                    aircraftType = baseAptMatch[2];
+                    crewPosition = baseAptMatch[3];
+                }
+
+                // Group items by approximate Y position (same row)
+                // Use a tolerance to group items on the same line
+                const rowTolerance = 3;
+                const rows = {};
+                
+                items.forEach(item => {
+                    const y = Math.round(item.transform[5] / rowTolerance) * rowTolerance;
+                    if (!rows[y]) rows[y] = [];
+                    rows[y].push({
+                        text: item.str.trim(),
+                        x: item.transform[4],
+                        width: item.width || 0,
+                        y: y
+                    });
+                });
+                
+                // Sort rows by Y position (descending, since PDF Y is bottom-up)
+                const sortedYs = Object.keys(rows).map(Number).sort((a, b) => b - a);
+                
+                // Find the date header row and build column mapping
+                let dateColumns = [];
+                
+                for (const y of sortedYs) {
+                    const row = rows[y].sort((a, b) => a.x - b.x);
+                    const rowText = row.map(r => r.text).join(' ');
+                    
+                    // Look for the row with date patterns like "Jan31 Feb01 Feb02..."
+                    const dateMatches = rowText.match(/(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{1,2}/g);
+                    if (dateMatches && dateMatches.length >= 20) {
+                        // This is the date header row
+                        for (const item of row) {
+                            const match = item.text.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)(\d{1,2})$/);
+                            if (match) {
+                                dateColumns.push({
+                                    x: item.x,
+                                    month: match[1],
+                                    day: parseInt(match[2])
+                                });
+                            }
+                        }
+                        break;
+                    }
+                }
+                
+                if (dateColumns.length === 0) continue;
+                
+                // Sort date columns by X position
+                dateColumns.sort((a, b) => a.x - b.x);
+                
+                // First pass: find all schedule row Y positions
+                const scheduleRowPattern = new RegExp(`${baseAirport}\\s*${aircraftType}\\s*${crewPosition}`);
+                const scheduleRowYs = [];
+                for (const y of sortedYs) {
+                    const row = rows[y].sort((a, b) => a.x - b.x);
+                    const rowText = row.map(r => r.text).join(' ');
+                    if (rowText.match(scheduleRowPattern)) {
+                        scheduleRowYs.push(y);
+                    }
+                }
+                scheduleRowYs.sort((a, b) => b - a); // Sort descending (PDF Y is bottom-up)
+                
+                // Second pass: process each schedule row with proper block boundaries
+                for (let schedIdx = 0; schedIdx < scheduleRowYs.length; schedIdx++) {
+                    const y = scheduleRowYs[schedIdx];
+                    const row = rows[y].sort((a, b) => a.x - b.x);
+                    const rowText = row.map(r => r.text).join(' ');
+                    
+                    // Determine block boundary (next schedule row or page edge)
+                    // Since PDF Y is bottom-up and we sorted descending, next schedule row has smaller Y
+                    let blockEndY;
+                    if (schedIdx + 1 < scheduleRowYs.length) {
+                        blockEndY = scheduleRowYs[schedIdx + 1];
+                    } else {
+                        blockEndY = Math.min(...sortedYs) - 10; // Smallest Y on page
+                    }
+                    
+                    // Find the line number in nearby rows (usually just below in PDF = lower Y)
+                    let lineNum = null;
+                    let lineType = null;
+                    let daysOffCount = 0;
+                    
+                    // Search within the block for line info (line number + type row)
+                    for (const nearY of sortedYs) {
+                        if (nearY < y && nearY > blockEndY) { // Within this bidline's block
+                            const nearRow = rows[nearY];
+                            const nearText = nearRow.map(r => r.text).join(' ');
+
+                            // Look for line number pattern
+                            if (!lineNum) {
+                                const lineMatch = nearText.match(/(\d{4})\s+(Primary|Secondary|Reserve)/i);
+                                if (lineMatch) {
+                                    lineNum = lineMatch[1];
+                                    lineType = lineMatch[2];
+                                    if (nearText.includes('60-day')) lineType += ' 60-day';
+                                    // PDF truncates "Int"→"In" and "AdH"→"Ad" on 60-day lines
+                                    if (nearText.match(/\bInt\b/i) || nearText.match(/60-day\s+In\b/i)) lineType += ' Int';
+                                    else if (nearText.match(/\bAdH\b/i) || nearText.match(/60-day\s+Ad\b/i)) lineType += ' AdH';
+                                }
+                            }
+
+                            // Look for DaysOFF
+                            if (!daysOffCount) {
+                                const daysMatch = nearText.match(/DaysOFF>\s*(\d+)/);
+                                if (daysMatch) {
+                                    daysOffCount = parseInt(daysMatch[1]);
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!lineNum) continue;
+
+                        // Collect all items in this bidline's block once, for both X-marker
+                        // detection and blank-column fallback below.
+                        const blkItems = [];
+                        for (const nearY of sortedYs) {
+                            if (nearY <= y && nearY > blockEndY) {
+                                for (const item of rows[nearY]) blkItems.push(item);
+                            }
+                        }
+
+                        // Find X markers anywhere in the block (not just the schedule row).
+                        // Some line types place X markers in continuation rows, not the top row.
+                        const datesOff = [];
+                        for (const item of blkItems) {
+                            if (item.text === 'X') {
+                                let closestDate = null;
+                                let closestDist = Infinity;
+                                for (const dc of dateColumns) {
+                                    const dist = Math.abs(item.x - dc.x);
+                                    if (dist < closestDist && dist < 25) {
+                                        closestDist = dist;
+                                        closestDate = dc;
+                                    }
+                                }
+                                if (closestDate) {
+                                    let year = baseYear;
+                                    if (closestDate.month === 'Jan') {
+                                        const hasDecember = dateColumns.some(d => d.month === 'Dec');
+                                        if (hasDecember) year = baseYear + 1;
+                                    }
+                                    const newDate = new Date(year, monthMap[closestDate.month], closestDate.day);
+                                    if (!datesOff.some(d => d.getTime() === newDate.getTime()))
+                                        datesOff.push(newDate);
+                                }
+                            }
+                        }
+
+
+                        // Only store if we haven't seen this line yet
+                        if (!lines[lineNum]) {
+                            lines[lineNum] = {
+                                lineNum,
+                                lineType: lineType.trim(),
+                                daysOffCount,
+                                datesOff,
+                                airports: [],
+                                scheduleEnd: pageScheduleEnd,  // Track when this line's schedule ends
+                                frontDH: 0,
+                                backDH: 0,
+                                trips: []
+                            };
+                        } else {
+                            // Merge dates if the line appears on multiple pages
+                            const existing = lines[lineNum].datesOff.map(d => d.getTime());
+                            for (const newDate of datesOff) {
+                                if (!existing.includes(newDate.getTime())) {
+                                    lines[lineNum].datesOff.push(newDate);
+                                }
+                            }
+                            // Only extend scheduleEnd for genuine 60-day lines.
+                            // BP1 lines can appear on the May page when a trip ends before
+                            // 0700Z on May 1 — that appearance must not promote scheduleEnd.
+                            if (lines[lineNum].lineType.includes('60-day') &&
+                                pageScheduleEnd > lines[lineNum].scheduleEnd) {
+                                lines[lineNum].scheduleEnd = pageScheduleEnd;
+                            }
+                        }
+                        
+                        // Extract airports from the block (all nearby rows below this schedule row)
+                        const excludeCodes = new Set(['FO', 'CA', 'INT', 'ADH', 'SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI',
+                                                      'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
+                                                      'UTC', 'STA', 'STD', 'ALL', 'AIR', 'THE', 'AND', 'FOR', 'NOT', 'OFF', 'DAY', 'ULR',
+                                                      'ART', 'RIG', 'BLG', 'CRT', 'SUM', 'PAY', 'POS', 'WORK']);
+                        const airportPattern = /^[A-Z]{3}$/;
+                        
+                        // Collect all words in block for deadhead analysis
+                        const blockWords = [];
+                        
+                        for (const blockY of sortedYs) {
+                            // Look at rows from schedule row down to next schedule row
+                            // PDF Y: smaller = further down, so blockY <= y && blockY > blockEndY
+                            if (blockY <= y && blockY > blockEndY) {
+                                const blockRow = rows[blockY];
+                                for (const item of blockRow) {
+                                    // Split multi-word items (e.g. "* ORD", "* ANC ORD") into
+                                    // individual tokens, using a tiny X offset to preserve
+                                    // left-to-right order within the same row/column.
+                                    const tokens = item.text.split(/\s+/).filter(t => t.length > 0);
+                                    if (tokens.length === 0) continue; // skip blank items
+                                    tokens.forEach((token, tokenIdx) => {
+                                        blockWords.push({
+                                            text: token,
+                                            x: item.x + tokenIdx * 0.001,
+                                            width: 0,
+                                            y: item.y
+                                        });
+                                        if (airportPattern.test(token) && !excludeCodes.has(token)) {
+                                            if (!lines[lineNum].airports.includes(token)) {
+                                                lines[lineNum].airports.push(token);
+                                            }
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                        
+                        // Also extract airports from the main schedule row
+                        for (const item of row) {
+                            if (airportPattern.test(item.text) && !excludeCodes.has(item.text)) {
+                                if (!lines[lineNum].airports.includes(item.text)) {
+                                    lines[lineNum].airports.push(item.text);
+                                }
+                            }
+                        }
+
+                        // Detect deadheads by analyzing each date column
+                        let frontDH = 0;
+                        let backDH = 0;
+
+                        // Sort date columns by X position
+                        const sortedDateCols = [...dateColumns].sort((a, b) => a.x - b.x);
+                        const colTolerance = 15;
+
+                        // Build per-column working/off status for trip-aware DH detection.
+                        // A column is "off" if it contains X or has no meaningful content.
+                        // A column is "working" if it has any content other than X or underscores.
+                        const colWorkingStatus = sortedDateCols.map(dc => {
+                            const colWds = blockWords.filter(w => Math.abs(w.x - dc.x) < colTolerance);
+                            const hasX = colWds.some(w => w.text === 'X');
+                            // Only count "real" trip content — 3-letter airports, flight numbers
+                            // (4+ alphanumeric chars), times (contain :), or WORK.
+                            // This excludes 2-letter airline codes (AA, DL, TK…) that can
+                            // be left-aligned and bleed into the previous column's X range.
+                            const hasContent = colWds.some(w => {
+                                if (w.text.length === 0 || w.text === 'X' || /^_+$/.test(w.text)) return false;
+                                return (airportPattern.test(w.text) && !excludeCodes.has(w.text)) ||
+                                       /^\w{4,}/.test(w.text) ||   // flight numbers: 8092, CX956, AA6363…
+                                       /:\d{2}/.test(w.text) ||    // times: 1:59, 19:40…
+                                       w.text === 'WORK';
+                            });
+                            return { isOff: hasX || !hasContent };
+                        });
+
+                        for (let colIdx = 0; colIdx < sortedDateCols.length; colIdx++) {
+                            const dc = sortedDateCols[colIdx];
+                            const colX = dc.x;
+                            
+                            // Get words in this date column, sorted by Y (top to bottom in PDF coords)
+                            const colWords = blockWords
+                                .filter(w => Math.abs(w.x - colX) < colTolerance)
+                                .sort((a, b) => b.y - a.y || a.x - b.x); // PDF Y is bottom-up, sort descending; tiebreak left-to-right so * precedes its airport code
+                            
+                            if (colWords.length === 0) continue;
+
+                            const colTexts = colWords.map(w => w.text);
+                            
+                            // Pre-compute next column texts for overnight DH check
+                            let nextColTexts = [];
+                            if (colIdx + 1 < sortedDateCols.length) {
+                                const nextColX = sortedDateCols[colIdx + 1].x;
+                                nextColTexts = blockWords
+                                    .filter(w => Math.abs(w.x - nextColX) < colTolerance)
+                                    .sort((a, b) => b.y - a.y || a.x - b.x)
+                                    .map(w => w.text);
+                            }
+
+                            // Look for deadhead patterns
+                            // Front DH: * followed by ORD (pilot deadheads FROM home to start trip)
+                            // Back DH: * followed by non-ORD airport, then ORD (same day or next day),
+                            //          with NO airports after ORD (pilot deadheads TO home to end trip)
+                            
+                            // Use per-column flags so that multiple * patterns on the same
+                            // day (e.g. * ANC * JFK ORD) count as only one DH event.
+                            let colFrontDH = false;
+                            let colBackDH  = false;
+                            for (let i = 0; i < colTexts.length; i++) {
+                                if (colTexts[i] === '*' && i + 1 < colTexts.length) {
+                                    const nextText = colTexts[i + 1];
+
+                                    if (!colFrontDH && nextText === baseAirport) {
+                                        // * [base] — front DH only if previous column has no actual trip
+                                        // content. WORK/reserve days are treated as "off" here because
+                                        // a pilot can deadhead to start a trip after a reserve day.
+                                        let prevIsOff;
+                                        if (colIdx === 0) {
+                                            prevIsOff = true;
+                                        } else {
+                                            const prevDc = sortedDateCols[colIdx - 1];
+                                            const prevColWds = blockWords.filter(w => Math.abs(w.x - prevDc.x) < colTolerance);
+                                            const hasTripContent = prevColWds.some(w => {
+                                                if (w.text.length === 0 || w.text === 'X' || /^_+$/.test(w.text) || w.text === 'WORK') return false;
+                                                return (airportPattern.test(w.text) && !excludeCodes.has(w.text)) ||
+                                                       /^\w{4,}/.test(w.text) ||
+                                                       /:\d{2}/.test(w.text);
+                                            });
+                                            prevIsOff = !hasTripContent;
+                                        }
+                                        if (prevIsOff) colFrontDH = true;
+
+                                    } else if (!colBackDH && airportPattern.test(nextText) && !excludeCodes.has(nextText) && nextText !== baseAirport) {
+                                        const remainingCurrent = colTexts.slice(i + 2);
+
+                                        // Same-day back DH: * [non-base] [base] all in this column
+                                        if (remainingCurrent.includes(baseAirport)) {
+                                            const baseIdx = remainingCurrent.indexOf(baseAirport);
+                                            const afterBase = remainingCurrent.slice(baseIdx + 1);
+                                            const hasAirportAfterBase = afterBase.some(
+                                                t => airportPattern.test(t) && !excludeCodes.has(t) && t !== baseAirport
+                                            );
+                                            const nextIsOff = colIdx + 1 >= sortedDateCols.length || colWorkingStatus[colIdx + 1].isOff;
+                                            if (!hasAirportAfterBase && nextIsOff) colBackDH = true;
+
+                                        // Overnight back DH: * [non-base] today, [base] is the first
+                                        // (or only) airport in the next column — not a full flight day.
+                                        // Allow the DH departure airport (nextText) before base, but no others.
+                                        } else if (nextColTexts.includes(baseAirport)) {
+                                            const baseIdx = nextColTexts.indexOf(baseAirport);
+                                            const afterBase = nextColTexts.slice(baseIdx + 1);
+                                            const hasAirportAfterBase = afterBase.some(
+                                                t => airportPattern.test(t) && !excludeCodes.has(t) && t !== baseAirport
+                                            );
+                                            const airportsBeforeBase = nextColTexts.slice(0, baseIdx).filter(
+                                                t => airportPattern.test(t) && !excludeCodes.has(t) && t !== baseAirport && t !== nextText
+                                            );
+                                            const baseIsFromNextTripDH = baseIdx >= 1 && nextColTexts[baseIdx - 1] === '*';
+                                            const nextNextIsOff = colIdx + 2 >= sortedDateCols.length || colWorkingStatus[colIdx + 2].isOff;
+                                            if (!hasAirportAfterBase && airportsBeforeBase.length === 0 && !baseIsFromNextTripDH && nextNextIsOff) {
+                                                colBackDH = true;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if (colFrontDH) frontDH++;
+                            if (colBackDH)  backDH++;
+                        }
+                        
+                        // Accumulate deadhead counts (lines[lineNum] is always initialized with 0)
+                        lines[lineNum].frontDH += frontDH;
+                        lines[lineNum].backDH += backDH;
+
+                        // Identify trips as contiguous blocks of working date columns
+                        const pageTrips = [];
+                        let tripStartIdx = null;
+                        for (let i = 0; i < sortedDateCols.length; i++) {
+                            const working = !colWorkingStatus[i].isOff;
+                            if (working && tripStartIdx === null) {
+                                tripStartIdx = i;
+                            } else if (!working && tripStartIdx !== null) {
+                                const sDc = sortedDateCols[tripStartIdx];
+                                const eDc = sortedDateCols[i - 1];
+                                pageTrips.push({
+                                    start: new Date(baseYear, monthMap[sDc.month], sDc.day),
+                                    end:   new Date(baseYear, monthMap[eDc.month], eDc.day)
+                                });
+                                tripStartIdx = null;
+                            }
+                        }
+                        // Handle a trip that runs to the end of this page's date range
+                        if (tripStartIdx !== null) {
+                            const sDc = sortedDateCols[tripStartIdx];
+                            const eDc = sortedDateCols[sortedDateCols.length - 1];
+                            pageTrips.push({
+                                start: new Date(baseYear, monthMap[sDc.month], sDc.day),
+                                end:   new Date(baseYear, monthMap[eDc.month], eDc.day)
+                            });
+                        }
+                        // Merge into line data, joining page-boundary trips that are adjacent
+                        for (const pt of pageTrips) {
+                            const existing = lines[lineNum].trips;
+                            const prev = existing.length > 0 ? existing[existing.length - 1] : null;
+                            // If this trip starts on the same day the previous one ended, extend it
+                            if (prev && pt.start <= prev.end) {
+                                if (pt.end > prev.end) prev.end = pt.end;
+                            } else {
+                                existing.push(pt);
+                            }
+                        }
+                    }
+                }
+            
+            // Debug: summarize parsed lines
+            const lineNums = Object.keys(lines);
+            console.log(`parseBidlineWithPositions: Found ${lineNums.length} lines`);
+            if (lineNums.length > 0) {
+                // Show first 3 lines with their scheduleEnd
+                for (let i = 0; i < Math.min(3, lineNums.length); i++) {
+                    const ln = lineNums[i];
+                    const info = lines[ln];
+                    console.log(`  Line ${ln}: scheduleEnd=${info.scheduleEnd ? info.scheduleEnd.toDateString() : 'undefined'}, datesOff=${info.datesOff ? info.datesOff.length : 0}`);
+                }
+            }
+
+            return { lines, meta: { baseAirport, aircraftType, crewPosition } };
+        }
+
+        // Detect whether a PDF's extracted text is a bidline schedule or a credit value file
+        function detectFileType(text) {
+            const hasDateCols  = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{1,2}\b/.test(text);
+            const hasSchedHdr  = /\b7\d{2}\s+(?:FO|CA)\b/.test(text);
+            const hasCreditRows = /^\s*\d{4}\s+(Primary|Secondary|Reserve)/m.test(text);
+            if (hasDateCols && hasSchedHdr) return 'bidline';
+            if (hasCreditRows) return 'credit';
+            return 'unknown';
+        }
+
+        // Extract the period string (e.g. "Apr26-May26") from a credit file's text
+        function extractCreditPeriod(text) {
+            const m = text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{2}\b/);
+            return m ? m[0] : null;
+        }
+
+        // Parse credit value document
+        function parseCreditValue(text) {
+            const lines = {};
+            
+            // Match lines with ORD and FO
+            const linePattern = /(\d{4})\s+(Primary|Secondary|Reserve)[\s\S]*?747\s+ORD\s+FO\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)/g;
+            
+            // Simpler approach: split by lines and parse each
+            const textLines = text.split(/\n/);
+            
+            for (const line of textLines) {
+                // Look for credit rows: 4-digit line number + crew position (FO or CA)
+                const lineNumMatch = line.match(/^\s*(\d{4})/);
+                if (!lineNumMatch) continue;
+                if (!/\b(?:FO|CA)\b/.test(line)) continue;
+                {
+                    // Extract numbers from the line
+                    const parts = line.trim().split(/\s+/);
+
+                    const lineNum = lineNumMatch[1];
+
+                    // Find line type
+                    let lineType = 'Unknown';
+                    // Check longest/most-specific strings first; handle both full words
+                    // (Int, AdH) and PDF-truncated forms (In, Ad)
+                    if (line.includes('Primary 60-day Int') || line.includes('Primary 60-day In ') || line.includes('Primary 60-day In\t')) lineType = 'Primary 60-day Int';
+                    else if (line.includes('Primary 60-day AdH') || line.includes('Primary 60-day Ad ') || line.includes('Primary 60-day Ad\t')) lineType = 'Primary 60-day AdH';
+                    else if (/Primary 60-day\s*$/.test(line.trimEnd())) lineType = 'Primary 60-day Int'; // fallback if suffix dropped entirely
+                    else if (line.includes('Primary Int') || line.includes('Primary In ') || line.includes('Primary In\t')) lineType = 'Primary Int';
+                    else if (line.includes('Primary AdH') || line.includes('Primary Ad ') || line.includes('Primary Ad\t')) lineType = 'Primary AdH';
+                    else if (line.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
+                    else if (line.includes('Secondary AdH') || line.includes('Secondary Ad ') || line.includes('Secondary Ad\t')) lineType = 'Secondary AdH';
+                    else if (line.includes('Reserve 60-day AdH') || line.includes('Reserve 60-day Ad ') || line.includes('Reserve 60-day Ad\t')) lineType = 'Reserve 60-day AdH';
+                    else if (line.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
+                    else if (line.includes('Reserve AdH') || line.includes('Reserve Ad ') || line.includes('Reserve Ad\t')) lineType = 'Reserve AdH';
+
+                    // Extract all numbers from the line
+                    const numbers = line.match(/\d+\.?\d*/g);
+                    if (!numbers || numbers.length < 12) continue;
+                    
+                    // The guarantee (SUM GREATER CREDIT OR RIG W ART33 AND ULR) is typically the second-to-last number before TAFB
+                    // Format: LINE, numbers..., Guarantee, TAFB, Days Off
+                    // Looking at the data: the guarantee column is at a specific position
+                    
+                    // Find position of key values
+                    // Days Off is the last number
+                    const daysOff = parseInt(numbers[numbers.length - 1]);
+                    
+                    // TAFB is second to last
+                    const tafb = parseFloat(numbers[numbers.length - 2]);
+                    
+                    // Guarantee (SUM GREATER CREDIT OR RIG W ART33 AND ULR) is third to last
+                    const guarantee = parseFloat(numbers[numbers.length - 3]);
+                    
+                    lines[lineNum] = {
+                        lineNum,
+                        lineType,
+                        guarantee,
+                        tafb,
+                        daysOff
+                    };
+                }
+            }
+            
+            console.log(`parseCreditValue: Found ${Object.keys(lines).length} lines`);
+            return lines;
+        }
+
+        // Simpler text-based bidline parser
+        function parseSimpleBidline(text) {
+            const lines = {};
+            
+            // Find schedule period dates
+            const periodMatch = text.match(/SCHEDULE FROM\s*:\s*(\d{2})\/(\d{2})\/(\d{4})\s+TO\s+(\d{2})\/(\d{2})\/(\d{4})/);
+            if (!periodMatch) {
+                console.error('Could not find schedule period');
+                return { lines: {}, startDate: null, endDate: null };
+            }
+            
+            const startDate = new Date(parseInt(periodMatch[3]), parseInt(periodMatch[1]) - 1, parseInt(periodMatch[2]));
+            const endDate = new Date(parseInt(periodMatch[6]), parseInt(periodMatch[4]) - 1, parseInt(periodMatch[5]));
+            
+            // Generate all dates in the period
+            const allDates = [];
+            const currentDate = new Date(startDate);
+            while (currentDate <= endDate) {
+                allDates.push(new Date(currentDate));
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            
+            // Parse each line block
+            // Look for patterns like "4111 Primary Int" and "DaysOFF> 13"
+            const lineBlocks = text.split(/(?=\d{4}\s+(?:Primary|Secondary|Reserve))/);
+            
+            for (const block of lineBlocks) {
+                const lineMatch = block.match(/^(\d{4})\s+(Primary|Secondary|Reserve)\s*(60-day)?\s*(Int|AdH|In|Ad)?/);
+                if (!lineMatch) continue;
+
+                const lineNum = lineMatch[1];
+                let lineType = lineMatch[2];
+                if (lineMatch[3]) lineType += ' ' + lineMatch[3];
+                // Normalize truncated PDF suffixes: "In"→"Int", "Ad"→"AdH"
+                if (lineMatch[4] === 'In') lineType += ' Int';
+                else if (lineMatch[4] === 'Ad') lineType += ' AdH';
+                else if (lineMatch[4]) lineType += ' ' + lineMatch[4];
+                
+                const daysOffMatch = block.match(/DaysOFF>\s*(\d+)/);
+                const daysOffCount = daysOffMatch ? parseInt(daysOffMatch[1]) : 0;
+                
+                // For now, we'll use the days off count from the credit document
+                // since parsing exact dates from the bidline PDF is complex
+                lines[lineNum] = {
+                    lineNum,
+                    lineType: lineType.trim(),
+                    daysOffCount
+                };
+            }
+            
+            return { lines, startDate, endDate, allDates };
+        }
+
+        // Main processing function
+        async function processDocuments() {
+            hideStatus();
+            
+            const bidlineFile = document.getElementById('bidlineFile').files[0];
+            const creditMonth1File = document.getElementById('creditMonth1File').files[0];
+            const creditMonth2File = document.getElementById('creditMonth2File').files[0];
+            
+            // Validate inputs
+            if (!bidlineFile) {
+                showStatus('Please upload the Bidline Schedule PDF', 'error');
+                return;
+            }
+            
+            // Get all date ranges
+            const dateRanges = getDateRanges();
+            
+            // Validate each range (only when dates are provided)
+            for (let i = 0; i < dateRanges.length; i++) {
+                if (dateRanges[i].end < dateRanges[i].start) {
+                    showStatus(`Date range ${i + 1}: End date must be after start date`, 'error');
+                    return;
+                }
+            }
+            
+            // Collect all desired dates from all ranges
+            const desiredDates = getAllDesiredDates(dateRanges);
+            
+            // Store for use in displayResults
+            lastDateRanges = dateRanges;
+            lastDesiredDates = desiredDates;
+            
+            const timeMultiplier = parseFloat(document.getElementById('timeMultiplier').value) || 1.0;
+            const filterPrimary   = document.getElementById('filterPrimary').checked;
+            const filterSecondary = document.getElementById('filterSecondary').checked;
+            const filterReserve   = document.getElementById('filterReserve').checked;
+            const lineDurationFilter = document.getElementById('lineDurationFilter').value;
+            
+            // Show loading
+            document.getElementById('loading').classList.add('visible');
+            document.getElementById('resultsSection').classList.remove('visible');
+            document.getElementById('processBtn').disabled = true;
+            
+            try {
+                // Extract text from PDFs
+                const bidlineText = await extractTextFromPDF(bidlineFile);
+                const credit1Text = creditMonth1File ? await extractTextFromPDF(creditMonth1File) : null;
+                const credit2Text = creditMonth2File ? await extractTextFromPDF(creditMonth2File) : null;
+
+                // === File type validation ===
+                const bidlineType = detectFileType(bidlineText);
+                if (bidlineType === 'credit') {
+                    throw new Error('The Bidline Schedule slot contains what looks like a Line Credit file. Please check your uploads and try again.');
+                }
+                if (bidlineType === 'unknown') {
+                    throw new Error('The Bidline Schedule file was not recognized. Please verify you uploaded the correct PDF.');
+                }
+
+                if (credit1Text) {
+                    const credit1Type = detectFileType(credit1Text);
+                    if (credit1Type === 'bidline') {
+                        throw new Error('Line Credit – Month 1 slot contains what looks like the Bidline Schedule. Please check your uploads and try again.');
+                    }
+                    if (credit1Type === 'unknown') {
+                        throw new Error('Line Credit – Month 1 file was not recognized. Please verify you uploaded the correct PDF.');
+                    }
+                }
+
+                if (credit2Text) {
+                    const credit2Type = detectFileType(credit2Text);
+                    if (credit2Type === 'bidline') {
+                        throw new Error('Line Credit – Month 2 slot contains what looks like the Bidline Schedule. Please check your uploads and try again.');
+                    }
+                    if (credit2Type === 'unknown') {
+                        throw new Error('Line Credit – Month 2 file was not recognized. Please verify you uploaded the correct PDF.');
+                    }
+                }
+
+                // Check for duplicate credit files (same file in both slots)
+                if (credit1Text && credit2Text) {
+                    const period1 = extractCreditPeriod(credit1Text);
+                    const period2 = extractCreditPeriod(credit2Text);
+                    if (creditMonth1File.name === creditMonth2File.name || (period1 && period2 && period1 === period2)) {
+                        const periodNote = period1 ? ` (both cover ${period1})` : '';
+                        throw new Error(`Both Line Credit slots contain the same file${periodNote}. Month 1 should be the single-month period and Month 2 the two-month period.`);
+                    }
+                }
+                // === End validation ===
+
+                // Parse documents
+                const credit1Data = credit1Text ? parseCreditValue(credit1Text) : {};
+                const credit2Data = credit2Text ? parseCreditValue(credit2Text) : {};
+                
+                // Also try position-based parsing for more accurate date detection
+                const { lines: bidlinePositions, meta: bidlineMeta } = await parseBidlineWithPositions(bidlineFile);
+
+                // Merge credit data (average guarantees for 60-day lines)
+                const mergedCredit = {};
+                const allLineNums = new Set([...Object.keys(credit1Data), ...Object.keys(credit2Data)]);
+                
+                for (const lineNum of allLineNums) {
+                    const c1 = credit1Data[lineNum];
+                    const c2 = credit2Data[lineNum];
+                    
+                    if (c1 && c2) {
+                        // Average the values
+                        mergedCredit[lineNum] = {
+                            lineNum,
+                            lineType: c1.lineType,
+                            guarantee: (c1.guarantee + c2.guarantee) / 2,
+                            daysOff: (c1.daysOff + c2.daysOff) / 2
+                        };
+                    } else if (c1) {
+                        mergedCredit[lineNum] = c1;
+                    } else if (c2) {
+                        mergedCredit[lineNum] = c2;
+                    }
+                }
+                
+                // Keep only lines present in the bidline schedule PDF (removes other-base lines
+                // from combined credit files)
+                for (const lineNum of Object.keys(mergedCredit)) {
+                    if (!bidlinePositions[lineNum]) delete mergedCredit[lineNum];
+                }
+
+                console.log(`mergedCredit has ${Object.keys(mergedCredit).length} lines`);
+
+                // Filter and score lines
+                const results = [];
+                let excluded = 0;
+
+                // Get airport preferences
+                const airportPrefs = getAirportPreferences();
+
+                for (const lineNum in bidlinePositions) {
+                    const bidlineInfo = bidlinePositions[lineNum];
+                    // Use credit data when available; fall back to bidline data for lines
+                    // (e.g. Reserve AdH) that don't appear in the credit value PDFs.
+                    const creditInfo = mergedCredit[lineNum] || {
+                        lineNum,
+                        lineType: bidlineInfo.lineType,
+                        guarantee: 0,
+                        daysOff: bidlineInfo.daysOffCount
+                    };
+
+                    // Apply line type filter (at least one checked category must match)
+                    const lt = creditInfo.lineType;
+                    const ltPasses = (filterPrimary   && lt.startsWith('Primary'))   ||
+                                     (filterSecondary && lt.startsWith('Secondary')) ||
+                                     (filterReserve   && lt.startsWith('Reserve'));
+                    if (!ltPasses) { excluded++; continue; }
+
+                    // Apply line duration filter
+                    const is60Day = creditInfo.lineType.includes('60-day');
+                    if (lineDurationFilter === 'bp1' && is60Day) {
+                        excluded++;
+                        continue;
+                    }
+
+                    // Check if all desired dates are off
+                    // A date is "off" if either:
+                    // 1. It has an X marker in the schedule (in datesOff)
+                    // 2. It falls AFTER the line's schedule end date (no flying scheduled for that period)
+                    // If no dates were specified, all lines pass this filter.
+                    let allDatesOff = true;
+
+
+                    if (desiredDates.length > 0) {
+                        const is60DayLine = creditInfo.lineType.includes('60-day');
+                        const defaultScheduleEnd = is60DayLine ? new Date(2026, 5, 1) : new Date(2026, 4, 1);
+
+                        if (bidlineInfo) {
+                            const scheduleEnd = bidlineInfo.scheduleEnd || defaultScheduleEnd;
+                            for (const desiredDate of desiredDates) {
+                                const dateInSchedule = bidlineInfo.datesOff && bidlineInfo.datesOff.some(offDate =>
+                                    offDate.getFullYear() === desiredDate.getFullYear() &&
+                                    offDate.getMonth() === desiredDate.getMonth() &&
+                                    offDate.getDate() === desiredDate.getDate()
+                                );
+                                const dateAfterScheduleEnd = desiredDate > scheduleEnd;
+                                if (!dateInSchedule && !dateAfterScheduleEnd) {
+                                    allDatesOff = false;
+                                    break;
+                                }
+                            }
+                        } else {
+                            for (const desiredDate of desiredDates) {
+                                if (desiredDate <= defaultScheduleEnd) {
+                                    allDatesOff = false;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (!allDatesOff) {
+                        excluded++;
+                        continue;
+                    }
+
+                    // Get airports for this bidline
+                    const lineAirports = bidlineInfo && bidlineInfo.airports ? bidlineInfo.airports : [];
+
+                    // Apply absolute whitelist filter (must visit at least one whitelisted airport)
+                    if (airportPrefs.whitelist.absolute && airportPrefs.whitelist.airports.length > 0) {
+                        const hasWhitelisted = lineAirports.some(apt => airportPrefs.whitelist.airports.includes(apt));
+                        if (!hasWhitelisted) {
+                            excluded++;
+                            continue;
+                        }
+                    }
+
+                    // Apply absolute blacklist filter (must not visit any blacklisted airport)
+                    if (airportPrefs.blacklist.absolute && airportPrefs.blacklist.airports.length > 0) {
+                        const hasBlacklisted = lineAirports.some(apt => airportPrefs.blacklist.airports.includes(apt));
+                        if (hasBlacklisted) {
+                            excluded++;
+                            continue;
+                        }
+                    }
+                    
+                    // Calculate base effective value
+                    let effectiveValue = creditInfo.guarantee + (creditInfo.daysOff * 4.85 * timeMultiplier);
+                    
+                    // Apply percentage adjustments for non-absolute preferences
+                    if (!airportPrefs.whitelist.absolute && airportPrefs.whitelist.airports.length > 0) {
+                        const hasWhitelisted = lineAirports.some(apt => airportPrefs.whitelist.airports.includes(apt));
+                        if (hasWhitelisted) {
+                            effectiveValue *= (1 + airportPrefs.whitelist.percent / 100);
+                        }
+                    }
+                    
+                    if (!airportPrefs.blacklist.absolute && airportPrefs.blacklist.airports.length > 0) {
+                        const hasBlacklisted = lineAirports.some(apt => airportPrefs.blacklist.airports.includes(apt));
+                        if (hasBlacklisted) {
+                            effectiveValue *= (1 - airportPrefs.blacklist.percent / 100);
+                        }
+                    }
+                    
+                    results.push({
+                        lineNum,
+                        lineType: creditInfo.lineType,
+                        guarantee: creditInfo.guarantee,
+                        daysOff: creditInfo.daysOff,
+                        effectiveValue,
+                        airports: lineAirports,
+                        frontDH: bidlineInfo ? (bidlineInfo.frontDH || 0) : 0,
+                        backDH: bidlineInfo ? (bidlineInfo.backDH || 0) : 0,
+                        trips: bidlineInfo ? (bidlineInfo.trips || []) : []
+                    });
+                }
+                
+                console.log(`Filtering complete: ${results.length} passed, ${excluded} excluded`);
+                
+                // Sort by effective value descending
+                results.sort((a, b) => b.effectiveValue - a.effectiveValue);
+
+                // Add rank
+                results.forEach((r, i) => r.rank = i + 1);
+
+                
+                rankedResults = results;
+                
+                // Display results context banner
+                const posLabel = bidlineMeta.crewPosition === 'CA' ? 'Captain'
+                               : bidlineMeta.crewPosition === 'FO' ? 'First Officer'
+                               : bidlineMeta.crewPosition || '';
+                const contextParts = [bidlineMeta.baseAirport, bidlineMeta.aircraftType, posLabel].filter(Boolean);
+                document.getElementById('resultsContext').textContent = contextParts.length
+                    ? `Showing results for: ${contextParts.join(' ')}`
+                    : '';
+
+                displayResults(results, excluded);
+                
+            } catch (error) {
+                console.error('Processing error:', error);
+                showStatus(`Error processing documents: ${error.message}`, 'error');
+            } finally {
+                document.getElementById('loading').classList.remove('visible');
+                document.getElementById('processBtn').disabled = false;
+            }
+        }
+
+        // Format airport list into lines of 5 codes each
+        function formatAirports(airports) {
+            if (!airports || airports.length === 0) return '—';
+            const chunks = [];
+            for (let i = 0; i < airports.length; i += 5) {
+                chunks.push(airports.slice(i, i + 5).join(', '));
+            }
+            return chunks.join('<br>');
+        }
+
+        // Format trip date ranges for display, e.g. "Apr 1–7 | Apr 23–May 1"
+        function formatTripDates(trips) {
+            if (!trips || trips.length === 0) return '—';
+            const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return trips.map(t => {
+                const s = t.start, e = t.end;
+                const sStr = `${mon[s.getMonth()]} ${s.getDate()}`;
+                const eStr = s.getMonth() === e.getMonth()
+                    ? `${e.getDate()}`
+                    : `${mon[e.getMonth()]} ${e.getDate()}`;
+                return `${sStr}–${eStr}`;
+            }).join('<br>');
+        }
+
+        // Display results in table
+        function displayResults(results, excluded) {
+            document.getElementById('resultsSection').classList.add('visible');
+            document.getElementById('exportBtn').style.display = 'inline-flex';
+            
+            // Update stats
+            document.getElementById('totalCompatible').textContent = results.length;
+            document.getElementById('totalExcluded').textContent = excluded;
+            document.getElementById('topValue').textContent = results.length > 0 ? 
+                results[0].effectiveValue.toFixed(2) : '0';
+            
+            // Populate table
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = '';
+            
+            for (const result of results) {
+                const tr = document.createElement('tr');
+                
+                let rankClass = 'other';
+                if (result.rank <= 3) rankClass = 'top-3';
+                else if (result.rank <= 10) rankClass = 'top-10';
+                
+                tr.innerHTML = `
+                    <td><span class="rank-badge ${rankClass}">${result.rank}</span></td>
+                    <td class="value-highlight">${result.lineNum}</td>
+                    <td><span class="line-type">${result.lineType}</span></td>
+                    <td class="value-highlight">${result.guarantee.toFixed(2)}</td>
+                    <td class="value-highlight">${result.daysOff}</td>
+                    <td class="value-highlight" style="color: var(--gold);">${result.effectiveValue.toFixed(2)}</td>
+                    <td class="value-highlight">${result.frontDH || 0}</td>
+                    <td class="value-highlight">${result.backDH || 0}</td>
+                    <td class="trips-cell">${formatTripDates(result.trips)}</td>
+                    <td class="airports-cell">${formatAirports(result.airports)}</td>
+                `;
+                
+                tbody.appendChild(tr);
+            }
+            
+            // Scroll to results
+            document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
+            
+            if (results.length === 0) {
+                showStatus(lastDesiredDates.length > 0 ? 'No bidlines found that have all your desired dates off. Try different date ranges.' : 'No bidlines matched your filters.', 'info');
+            } else {
+                const rangeCount = lastDateRanges.length;
+                const dateCount = lastDesiredDates.length;
+                showStatus(`Found ${results.length} compatible bidlines (${rangeCount} date range${rangeCount > 1 ? 's' : ''}, ${dateCount} total days)`, 'success');
+            }
+        }
+
+        // Export results to CSV
+        function exportResults() {
+            if (rankedResults.length === 0) {
+                showStatus('No results to export', 'error');
+                return;
+            }
+            
+            const headers = ['Rank', 'Line', 'Type', 'Avg Guarantee', 'Avg Days Off', 'Effective Value', 'Front DH', 'Back DH', 'Trips', 'Airports'];
+            const rows = rankedResults.map(r => [
+                r.rank,
+                r.lineNum,
+                r.lineType,
+                r.guarantee.toFixed(2),
+                r.daysOff,
+                r.effectiveValue.toFixed(2),
+                r.frontDH || 0,
+                r.backDH || 0,
+                `"${formatTripDates(r.trips).replace(/<br>/g, ' | ')}"`,
+                r.airports ? `"${formatAirports(r.airports).replace(/<br>/g, ', ')}"` : ''
+            ]);
+            
+            const csv = [
+                headers.join(','),
+                ...rows.map(r => r.join(','))
+            ].join('\n');
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `bidline_rankings_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showStatus('CSV exported successfully!', 'success');
+        }
+
+        // Sort functionality
+        let currentSort = { column: 'effectiveValue', direction: 'desc' };
+        
+        document.querySelectorAll('.results-table th.sortable').forEach(th => {
+            th.addEventListener('click', () => {
+                const column = th.dataset.sort;
+                
+                if (currentSort.column === column) {
+                    currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort.column = column;
+                    currentSort.direction = 'desc';
+                }
+                
+                // Sort results
+                rankedResults.sort((a, b) => {
+                    const aVal = a[column];
+                    const bVal = b[column];
+                    const dir = currentSort.direction === 'asc' ? 1 : -1;
+                    
+                    if (typeof aVal === 'string') {
+                        return aVal.localeCompare(bVal) * dir;
+                    }
+                    return (aVal - bVal) * dir;
+                });
+                
+                // Re-rank based on effective value (keep original ranking logic)
+                const sortedByValue = [...rankedResults].sort((a, b) => b.effectiveValue - a.effectiveValue);
+                rankedResults.forEach(r => {
+                    r.rank = sortedByValue.findIndex(s => s.lineNum === r.lineNum) + 1;
+                });
+                
+                // Update UI
+                document.querySelectorAll('.results-table th.sortable').forEach(h => {
+                    h.classList.remove('sorted');
+                });
+                th.classList.add('sorted');
+                
+                displayResults(rankedResults, parseInt(document.getElementById('totalExcluded').textContent));
+            });
+        });
+
+        // ── Tooltip logic ──────────────────────────────────────────────
+        function toggleTooltip(id) {
+            const bubble = document.getElementById(id);
+            const isActive = bubble.classList.contains('active');
+            closeAllTooltips();
+            if (!isActive) bubble.classList.add('active');
+        }
+
+        function closeAllTooltips() {
+            document.querySelectorAll('.tooltip-bubble.active').forEach(b => b.classList.remove('active'));
+        }
+
+        document.addEventListener('click', function(e) {
+            if (!e.target.classList.contains('tooltip-icon')) closeAllTooltips();
+        });
+
+        // ── Help modal logic ────────────────────────────────────────────
+        function openHelp() {
+            document.getElementById('helpOverlay').classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeHelp() {
+            document.getElementById('helpOverlay').classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        function overlayClick(e) {
+            if (e.target === document.getElementById('helpOverlay')) closeHelp();
+        }
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeHelp();
+        });
+
+        // Wire up calendar-open-month behaviour for the initial static date range row
+        setupDateRangeInputs(
+            document.getElementById('startDate1'),
+            document.getElementById('endDate1')
+        );
+    </script>
+
+    <!-- PWA: register service worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js')
+                .catch(err => console.warn('Service worker registration failed:', err));
+        }
+    </script>
+</body>
+</html>
