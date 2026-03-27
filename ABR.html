@@ -1522,6 +1522,18 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
 
         // Toggle percentage input visibility based on absolute checkbox
         document.addEventListener('DOMContentLoaded', function() {
+            // Beta expiry check
+            const EXPIRY = new Date('2026-05-01');
+            if (new Date() >= EXPIRY) {
+                document.body.innerHTML = `
+                    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#091d60;color:#fff;text-align:center;padding:40px;">
+                        <img src="icon-192.png" style="width:96px;margin-bottom:24px;border-radius:16px;">
+                        <h1 style="font-size:24px;margin-bottom:16px;">Bidline Ranker — Beta Expired</h1>
+                        <p style="max-width:400px;line-height:1.6;color:#c5ccd6;">This beta version expired on May 1, 2026. Contact <a href="mailto:hainesusa@gmail.com" style="color:#ffb718;">hainesusa@gmail.com</a> for access to the current version.</p>
+                    </div>`;
+                return;
+            }
+
             // Prevent default drag behavior on document (so files don't open in browser)
             document.addEventListener('dragover', (e) => e.preventDefault());
             document.addEventListener('drop', (e) => e.preventDefault());
