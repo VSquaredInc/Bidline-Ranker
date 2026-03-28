@@ -1346,6 +1346,50 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
             originalConsoleWarn.apply(console, args);
         };
 
+        // ── Analytics ────────────────────────────────────────────────────────────
+        const ANALYTICS_URL = 'https://script.google.com/macros/s/REPLACE_WITH_YOUR_DEPLOYMENT_URL/exec';
+        const APP_VERSION   = '1.1.0';
+
+        function _uuid() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+                const r = Math.random() * 16 | 0;
+                return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+            });
+        }
+
+        // Persistent anonymous user ID (survives app restarts)
+        const _userId = (() => {
+            let id = localStorage.getItem('abr_uid');
+            if (!id) { id = _uuid(); localStorage.setItem('abr_uid', id); }
+            return id;
+        })();
+
+        // Per-session ID (resets each time the app is opened)
+        const _sessionId = _uuid();
+        const _device = /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
+
+        function track(event, props = {}) {
+            if (ANALYTICS_URL.includes('REPLACE_WITH')) return; // not yet configured
+            const payload = JSON.stringify({
+                event,
+                userId:     _userId,
+                sessionId:  _sessionId,
+                appVersion: APP_VERSION,
+                device:     _device,
+                ts:         new Date().toISOString(),
+                ...props
+            });
+            // sendBeacon fires-and-forgets; won't block or throw
+            navigator.sendBeacon(ANALYTICS_URL, payload);
+        }
+
+        // Track every app open
+        track('app_open');
+
+        // Track PWA installs
+        window.addEventListener('appinstalled', () => track('pwa_install'));
+        // ── End Analytics ────────────────────────────────────────────────────────
+
         // Global state
         let bidlineData = null;
         let creditMonth1Data = null;
@@ -2648,10 +2692,26 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
                     ? `Showing results for: ${contextParts.join(' ')}`
                     : '';
 
+                track('processing_complete', {
+                    aircraftType:     bidlineMeta.aircraftType,
+                    base:             bidlineMeta.baseAirport,
+                    position:         bidlineMeta.crewPosition,
+                    linesRanked:      results.length,
+                    linesExcluded:    excluded,
+                    hasCreditFiles:   !!(credit1Text || credit2Text),
+                    filterPrimary,
+                    filterSecondary,
+                    filterReserve,
+                    lineDurationFilter,
+                    desiredDatesCount:  desiredDates.length,
+                    airportPrefsUsed:   airportPrefs.whitelist.airports.length > 0 || airportPrefs.blacklist.airports.length > 0
+                });
+
                 displayResults(results, excluded);
-                
+
             } catch (error) {
                 console.error('Processing error:', error);
+                track('processing_error', { errorMessage: error.message });
                 showStatus(`Error processing documents: ${error.message}`, 'error');
             } finally {
                 document.getElementById('loading').classList.remove('visible');
