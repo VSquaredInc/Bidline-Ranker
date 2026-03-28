@@ -1825,7 +1825,7 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
                 }
 
                 // Extract base airport, aircraft type, and crew position from page header
-                const baseAptMatch = fullPageText.match(/\b([A-Z]{3})\s+(7\d{2})\s+(FO|CA)\b/);
+                const baseAptMatch = fullPageText.match(/\b([A-Z]{3})\s+(7[0-9A-Z]{2})\s+(FO|CA)\b/);
                 if (baseAptMatch) {
                     baseAirport  = baseAptMatch[1];
                     aircraftType = baseAptMatch[2];
@@ -2242,7 +2242,7 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
         // Detect whether a PDF's extracted text is a bidline schedule or a credit value file
         function detectFileType(text) {
             const hasDateCols  = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{1,2}\b/.test(text);
-            const hasSchedHdr  = /\b7\d{2}\s+(?:FO|CA)\b/.test(text);
+            const hasSchedHdr  = /\b7[0-9A-Z]{2}\s+(?:FO|CA)\b/.test(text);
             const hasCreditRows = /^\s*\d{4}\s+(Primary|Secondary|Reserve)/m.test(text);
             if (hasDateCols && hasSchedHdr) return 'bidline';
             if (hasCreditRows) return 'credit';
