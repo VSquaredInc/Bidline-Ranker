@@ -1,0 +1,8 @@
+{
+  "name": "bidline-portal-api",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "axios-ntlm": "^1.4.6"
+  }
+}

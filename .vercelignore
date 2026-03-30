@@ -1,0 +1,6 @@
+backups/
+*.pdf
+Other Bases/
+make_icon.py
+bidline_parser.py
+Analytics-script.gs

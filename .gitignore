@@ -10,3 +10,8 @@ Atlas Pilot Globe.png
 # Python cache
 __pycache__/
 *.pyc
+
+# Local backups
+backups/
+
+.vercel

@@ -1000,6 +1000,49 @@
                 display: none;
             }
         }
+        /* ── Portal Fetch ──────────────────────────────────────────── */
+        .source-tabs {
+            display: flex;
+            gap: 4px;
+            border-bottom: 1px solid var(--navy-lighter);
+            margin-bottom: 20px;
+        }
+        .source-tab {
+            padding: 10px 18px;
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -1px;
+            color: var(--gray-600);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .source-tab:hover { color: var(--white); }
+        .source-tab.active {
+            color: var(--gold);
+            border-bottom-color: var(--gold);
+        }
+        .portal-form {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        .portal-row {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .portal-row .form-group { flex: 1; min-width: 140px; }
+        .fetch-status {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        .fetch-status.error   { color: var(--error); }
+        .fetch-status.success { color: var(--success); }
+        .fetch-status.loading { color: var(--gold); }
     </style>
 </head>
 <body>
@@ -1025,29 +1068,82 @@
         <div class="card">
             <div class="card-header">
                 <div class="step-number">1</div>
-                <h2 class="card-title">Upload Bid Documents</h2>
+                <h2 class="card-title">Get Bid Documents</h2>
             </div>
-            <div class="upload-grid">
-                <div class="upload-zone" id="bidlineZone">
-                    <input type="file" id="bidlineFile" accept=".pdf">
-                    <div class="upload-icon">📋</div>
-                    <div class="upload-label">Bidline Schedule</div>
-                    <div class="upload-hint">Must match your crew position (CA or FO)</div>
-                    <div class="upload-filename" id="bidlineFilename"></div>
+
+            <div class="source-tabs">
+                <button class="source-tab active" id="tabPortal" onclick="switchTab('portal')">Fetch from Portal</button>
+                <button class="source-tab" id="tabManual" onclick="switchTab('manual')">Upload Manually</button>
+            </div>
+
+            <!-- Portal fetch panel -->
+            <div id="panelPortal">
+                <div class="portal-form">
+                    <div class="portal-row">
+                        <div class="form-group">
+                            <label for="portalUsername">Username</label>
+                            <input type="text" id="portalUsername" placeholder="e.g. jsmith" autocomplete="username">
+                        </div>
+                        <div class="form-group">
+                            <label for="portalPassword">Password</label>
+                            <input type="password" id="portalPassword" autocomplete="current-password">
+                        </div>
+                    </div>
+                    <div class="portal-row">
+                        <div class="form-group">
+                            <label for="portalAircraft">Aircraft</label>
+                            <select id="portalAircraft" onchange="updatePortalBases()">
+                                <option value="">Select…</option>
+                                <option value="747">B747</option>
+                                <option value="767">B767</option>
+                                <option value="777">B777</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="portalBase">Base</label>
+                            <select id="portalBase">
+                                <option value="">Select aircraft first</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="portalPosition">Position</label>
+                            <select id="portalPosition">
+                                <option value="CA">Captain (CA)</option>
+                                <option value="FO">First Officer (FO)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+                        <button class="btn" id="fetchBtn" onclick="fetchFromPortal()">Fetch Documents</button>
+                        <span id="fetchStatus" class="fetch-status"></span>
+                    </div>
                 </div>
-                <div class="upload-zone" id="creditMonth1Zone">
-                    <input type="file" id="creditMonth1File" accept=".pdf">
-                    <div class="upload-icon">💰</div>
-                    <div class="upload-label">Line Credit - Month 1 <span style="font-size:0.8em;opacity:0.7;">(Optional)</span></div>
-                    <div class="upload-hint">e.g., 747_Lines_Feb26-Feb26_Period.pdf</div>
-                    <div class="upload-filename" id="creditMonth1Filename"></div>
-                </div>
-                <div class="upload-zone" id="creditMonth2Zone">
-                    <input type="file" id="creditMonth2File" accept=".pdf">
-                    <div class="upload-icon">💰</div>
-                    <div class="upload-label">Line Credit - Month 2 <span style="font-size:0.8em;opacity:0.7;">(Optional)</span></div>
-                    <div class="upload-hint">e.g., 747_Lines_Feb26-Mar26_Period.pdf</div>
-                    <div class="upload-filename" id="creditMonth2Filename"></div>
+            </div>
+
+            <!-- Manual upload panel (fallback) -->
+            <div id="panelManual" style="display:none;">
+                <div class="upload-grid">
+                    <div class="upload-zone" id="bidlineZone">
+                        <input type="file" id="bidlineFile" accept=".pdf">
+                        <div class="upload-icon">📋</div>
+                        <div class="upload-label">Bidline Schedule</div>
+                        <div class="upload-hint">Must match your crew position (CA or FO)</div>
+                        <div class="upload-filename" id="bidlineFilename"></div>
+                    </div>
+                    <div class="upload-zone" id="creditMonth1Zone">
+                        <input type="file" id="creditMonth1File" accept=".pdf">
+                        <div class="upload-icon">💰</div>
+                        <div class="upload-label">Line Credit - Month 1 <span style="font-size:0.8em;opacity:0.7;">(Optional)</span></div>
+                        <div class="upload-hint">e.g., 747_Lines_Feb26-Feb26_Period.pdf</div>
+                        <div class="upload-filename" id="creditMonth1Filename"></div>
+                    </div>
+                    <div class="upload-zone" id="creditMonth2Zone">
+                        <input type="file" id="creditMonth2File" accept=".pdf">
+                        <div class="upload-icon">💰</div>
+                        <div class="upload-label">Line Credit - Month 2 <span style="font-size:0.8em;opacity:0.7;">(Optional)</span></div>
+                        <div class="upload-hint">e.g., 747_Lines_Feb26-Mar26_Period.pdf</div>
+                        <div class="upload-filename" id="creditMonth2Filename"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2912,6 +3008,127 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
             document.getElementById('startDate1'),
             document.getElementById('endDate1')
         );
+
+        // ── Portal Fetch ──────────────────────────────────────────────────────
+        // UPDATE this URL after running "npx vercel deploy" for the first time.
+        const PORTAL_API_URL = 'https://bidline.vercel.app/api/fetch-bid';
+
+        const AIRCRAFT_BASES = {
+            '747': ['ANC', 'JFK', 'LAX', 'MIA', 'ORD'],
+            '767': ['JFK', 'MIA', 'SEA'],
+            '777': ['ANC', 'LAX', 'MIA', 'ORD']
+        };
+
+        function switchTab(tab) {
+            const isPortal = tab === 'portal';
+            document.getElementById('tabPortal').classList.toggle('active', isPortal);
+            document.getElementById('tabManual').classList.toggle('active', !isPortal);
+            document.getElementById('panelPortal').style.display = isPortal ? '' : 'none';
+            document.getElementById('panelManual').style.display = isPortal ? 'none' : '';
+        }
+
+        function updatePortalBases() {
+            const aircraft = document.getElementById('portalAircraft').value;
+            const sel = document.getElementById('portalBase');
+            sel.innerHTML = '';
+            if (!aircraft) {
+                sel.innerHTML = '<option value="">Select aircraft first</option>';
+                return;
+            }
+            (AIRCRAFT_BASES[aircraft] || []).forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b;
+                opt.textContent = b;
+                sel.appendChild(opt);
+            });
+        }
+
+        function setFetchStatus(msg, type) {
+            const el = document.getElementById('fetchStatus');
+            el.textContent = msg;
+            el.className = `fetch-status ${type}`;
+        }
+
+        function base64ToFile(b64, filename) {
+            const binary = atob(b64);
+            const bytes = new Uint8Array(binary.length);
+            for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+            return new File([bytes], filename, { type: 'application/pdf' });
+        }
+
+        function loadFileIntoZone(file, inputId, zoneId, filenameId) {
+            const input = document.getElementById(inputId);
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            input.files = dt.files;
+            document.getElementById(zoneId).classList.add('has-file');
+            document.getElementById(filenameId).textContent = file.name;
+        }
+
+        async function portalPost(body) {
+            const res = await fetch(PORTAL_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || `Server error ${res.status}`);
+            return data;
+        }
+
+        async function fetchFromPortal() {
+            if (PORTAL_API_URL.includes('YOUR-PROJECT')) {
+                setFetchStatus('Portal fetch is not yet configured. Use "Upload Manually" instead.', 'error');
+                return;
+            }
+
+            const username    = document.getElementById('portalUsername').value.trim();
+            const password    = document.getElementById('portalPassword').value;
+            const aircraft    = document.getElementById('portalAircraft').value;
+            const base        = document.getElementById('portalBase').value;
+            const crewPosition = document.getElementById('portalPosition').value;
+
+            if (!username || !password) { setFetchStatus('Enter your Atlas Air username and password.', 'error'); return; }
+            if (!aircraft || !base)     { setFetchStatus('Select aircraft and base.', 'error'); return; }
+
+            const btn = document.getElementById('fetchBtn');
+            btn.disabled = true;
+
+            try {
+                setFetchStatus('Connecting to portal\u2026', 'loading');
+                const { files, folder } = await portalPost({
+                    action: 'list', username, password, aircraft, base, crewPosition
+                });
+
+                const bidlineEntry = files.find(f => f.role === 'bidline');
+                const credit1Entry = files.find(f => f.role === 'credit1');
+                const credit2Entry = files.find(f => f.role === 'credit2');
+
+                if (!bidlineEntry) throw new Error('Bidline file not found in the portal folder.');
+
+                setFetchStatus(`Found ${files.length} file(s) in \u201c${folder}\u201d. Downloading\u2026`, 'loading');
+
+                const bl = await portalPost({ action: 'download', username, password, fileUrl: bidlineEntry.url });
+                loadFileIntoZone(base64ToFile(bl.data, bidlineEntry.name), 'bidlineFile', 'bidlineZone', 'bidlineFilename');
+
+                if (credit1Entry) {
+                    const c1 = await portalPost({ action: 'download', username, password, fileUrl: credit1Entry.url });
+                    loadFileIntoZone(base64ToFile(c1.data, credit1Entry.name), 'creditMonth1File', 'creditMonth1Zone', 'creditMonth1Filename');
+                }
+                if (credit2Entry) {
+                    const c2 = await portalPost({ action: 'download', username, password, fileUrl: credit2Entry.url });
+                    loadFileIntoZone(base64ToFile(c2.data, credit2Entry.name), 'creditMonth2File', 'creditMonth2Zone', 'creditMonth2Filename');
+                }
+
+                const loaded = [bidlineEntry, credit1Entry, credit2Entry].filter(Boolean).length;
+                setFetchStatus(`\u2713 ${loaded} file(s) loaded. Proceed to Step 2.`, 'success');
+
+            } catch (err) {
+                setFetchStatus(`Error: ${err.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
     </script>
 
     <!-- PWA: register service worker -->
