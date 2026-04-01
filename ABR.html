@@ -1392,7 +1392,7 @@
                 <h3>Step 2 — Preferences</h3>
                 <ul>
                     <li><strong>Dates Desired Off</strong> — Enter the dates you want off. Only lines where <em>every</em> requested date is an off day (or falls after the line's schedule end) will appear in results. You can add multiple ranges.</li>
-                    <li><strong>Time Multiplier</strong> — Controls how much weight days off carry in the ranking score relative to guarantee hours. At 1.0, each day off is valued at its CRT rate of 4.85 credit hours (no overtime assumed). Raise it to reflect overtime expectations: 1.41 approximates picking up one overtime day per bid period (~6.85 hrs/day effective), 1.82 approximates two overtime days (~8.85 hrs/day). Lower it below 1.0 to rank guarantee pay higher than days off.</li>
+                    <li><strong>Time Multiplier</strong> — Controls how much weight days off carry in the ranking score relative to guarantee hours. At 1.0, each day off is valued at its CRT rate of 4.85 credit hours (no overtime assumed). Raise it to reflect overtime expectations: 1.41 approximates picking up one overtime day per bid period (~6.85 hrs/day effective), 1.82 approximates two overtime days (~8.85 hrs/day). Lower it below 1.0 to rank guarantee pay higher than days off. Set it to 0 to rank lines purely by average guaranteed credit hours, ignoring days off entirely.</li>
                     <li><strong>Line Type Filter</strong> — Primary lines are the lines you can hold based on seniority; Secondary lines are fallback holds; Reserve lines are on-call. Line subtypes are Int (International), AdH (Ad-Hoc), and 60-day variants of each. Filter to <em>Primary Only</em> for the most relevant results, or use <em>Primary &amp; Secondary</em> to exclude reserve.</li>
                     <li><strong>Line Duration Filter</strong> — Bid Period 1 lines cover a single bid period; Bid Period 2 lines span two consecutive bid periods. Filter if you want to compare only one type.</li>
                     <li><strong>Airport Preferences</strong> — Enter airports you prefer or want to avoid (comma-separated IATA codes). A non-absolute preference applies a percentage bonus or penalty to Effective Value. Checking <em>Absolute</em> completely excludes lines that don't meet the criteria.</li>
@@ -2548,7 +2548,8 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
             lastDateRanges = dateRanges;
             lastDesiredDates = desiredDates;
             
-            const timeMultiplier = parseFloat(document.getElementById('timeMultiplier').value) || 1.0;
+            const timeMultiplierRaw = parseFloat(document.getElementById('timeMultiplier').value);
+            const timeMultiplier = isNaN(timeMultiplierRaw) ? 1.0 : timeMultiplierRaw;
             const filterPrimary   = document.getElementById('filterPrimary').checked;
             const filterSecondary = document.getElementById('filterSecondary').checked;
             const filterReserve   = document.getElementById('filterReserve').checked;
