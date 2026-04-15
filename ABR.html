@@ -1838,7 +1838,7 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
 
             // Parse the year from the document
             const yearMatch = text.match(/SCHEDULE FROM\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
-            const baseYear = yearMatch ? parseInt(yearMatch[3]) : 2026;
+            const baseYear = yearMatch ? parseInt(yearMatch[3]) : new Date().getFullYear();
 
             // Convert date strings to Date objects
             const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 
@@ -1928,8 +1928,8 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
             const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
                               'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
             
-            // Determine base year from first page
-            let baseYear = 2026;
+            // Determine base year from first page (falls back to current year if header parse fails)
+            let baseYear = new Date().getFullYear();
             let baseAirport  = 'ORD';
             let aircraftType = '';
             let crewPosition = '';
