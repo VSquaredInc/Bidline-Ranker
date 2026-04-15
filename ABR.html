@@ -1663,13 +1663,13 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
         // Toggle percentage input visibility based on absolute checkbox
         document.addEventListener('DOMContentLoaded', function() {
             // Beta expiry check
-            const EXPIRY = new Date('2026-05-01');
+            const EXPIRY = new Date('2026-08-01');
             if (new Date() >= EXPIRY) {
                 document.body.innerHTML = `
                     <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;background:#091d60;color:#fff;text-align:center;padding:40px;">
                         <img src="icon-192.png" style="width:96px;margin-bottom:24px;border-radius:16px;">
                         <h1 style="font-size:24px;margin-bottom:16px;">Bidline Ranker — Beta Expired</h1>
-                        <p style="max-width:400px;line-height:1.6;color:#c5ccd6;">This beta version expired on May 1, 2026. Contact <a href="mailto:visionvectorinc@gmail.com" style="color:#ffb718;">visionvectorinc@gmail.com</a> for access to the current version.</p>
+                        <p style="max-width:400px;line-height:1.6;color:#c5ccd6;">This beta version expired on August 1, 2026. Contact <a href="mailto:visionvectorinc@gmail.com" style="color:#ffb718;">visionvectorinc@gmail.com</a> for access to the current version.</p>
                     </div>`;
                 return;
             }
@@ -1944,7 +1944,10 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
                 
                 // Detect schedule period end date from header
                 // Look for "CREW SCHEDULE FROM :MM/DD/YYYY TO MM/DD/YYYY"
-                let pageScheduleEnd = new Date(2026, 4, 1); // Default to May 1, 2026
+                // Dynamic fallback: first day of next calendar month relative to today.
+                // Only used when the CREW SCHEDULE FROM header can't be parsed.
+                const _today = new Date();
+                let pageScheduleEnd = new Date(_today.getFullYear(), _today.getMonth() + 1, 1);
                 const periodMatch = fullPageText.match(/CREW SCHEDULE FROM\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})\s+TO\s+(\d{2})\/(\d{2})\/(\d{4})/);
                 if (periodMatch) {
                     const endMonth = parseInt(periodMatch[4]) - 1; // JS months are 0-indexed
@@ -2143,8 +2146,8 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
                                 }
                             }
                             // Only extend scheduleEnd for genuine 60-day lines.
-                            // BP1 lines can appear on the May page when a trip ends before
-                            // 0700Z on May 1 — that appearance must not promote scheduleEnd.
+                            // BP1 lines can appear on the second-month page when a trip ends
+                            // just before the month boundary — that must not promote scheduleEnd.
                             if (lines[lineNum].lineType.includes('60-day') &&
                                 pageScheduleEnd > lines[lineNum].scheduleEnd) {
                                 lines[lineNum].scheduleEnd = pageScheduleEnd;
@@ -2686,7 +2689,14 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
 
                     if (desiredDates.length > 0) {
                         const is60DayLine = creditInfo.lineType.includes('60-day');
-                        const defaultScheduleEnd = is60DayLine ? new Date(2026, 5, 1) : new Date(2026, 4, 1);
+                        // Derive fallback schedule end from bidPeriodStart so this
+                        // stays correct across bid cycles (May → June 1, June → July 1, etc.)
+                        const _bps = bidPeriodStart || new Date();
+                        const _bpYear = _bps.getFullYear();
+                        const _bpMonth = _bps.getMonth();
+                        const defaultScheduleEnd = is60DayLine
+                            ? new Date(_bpYear, _bpMonth + 2, 1)
+                            : new Date(_bpYear, _bpMonth + 1, 1);
 
                         if (bidlineInfo) {
                             const scheduleEnd = bidlineInfo.scheduleEnd || defaultScheduleEnd;

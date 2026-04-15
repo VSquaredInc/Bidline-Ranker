@@ -181,9 +181,18 @@ async function listFiles(username, password, aircraft, base, crewPosition) {
         throw err;
     }
 
-    // 6. Assign credit roles: sort alphabetically so "Apr-Apr" < "Apr-May"
-    //    making credit1 the single-month file and credit2 the two-month file
-    const credits = matched.filter(f => f.role === 'credit').sort((a, b) => a.name.localeCompare(b.name));
+    // 6. Assign credit roles: sort by period end-date so the single-month file
+    //    (earlier end date) becomes credit1 and the two-month file becomes credit2.
+    //    Alphabetical sort breaks when the second month sorts before the first
+    //    (e.g. "May26-Jun26" < "May26-May26" because J < M).
+    function periodEndScore(name) {
+        const m = name.match(/([A-Za-z]{3})(\d{2})-([A-Za-z]{3})(\d{2})/);
+        if (!m) return 0;
+        const endMon = MONTHS[m[3].toUpperCase()];
+        const endYr  = parseInt(m[4]) + 2000;
+        return endYr * 12 + (endMon !== undefined ? endMon : 0);
+    }
+    const credits = matched.filter(f => f.role === 'credit').sort((a, b) => periodEndScore(a.name) - periodEndScore(b.name));
     if (credits[0]) credits[0].role = 'credit1';
     if (credits[1]) credits[1].role = 'credit2';
 
