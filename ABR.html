@@ -1362,7 +1362,7 @@
         <footer>
             <p>Atlas Air Pilot Bidline Ranking Tool</p>
             <p style="margin-top: 6px;">Developed by <strong>Christopher Haines</strong> &mdash; <a href="mailto:visionvectorinc@gmail.com" style="color: var(--gold); text-decoration: none;">visionvectorinc@gmail.com</a></p>
-            <p style="margin-top: 4px; font-size: 12px; opacity: 0.6;">V<sup>2</sup> &mdash; Vision Vector Inc.</p>
+            <p style="margin-top: 4px; font-size: 12px; opacity: 0.6;">V<sup>2</sup> &mdash; Vision Vector Inc. &mdash; <span id="footerVersion"></span></p>
         </footer>
     </div>
 
@@ -1444,7 +1444,7 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.1.0';
+        const APP_VERSION   = '1.2.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -1673,6 +1673,10 @@ Airport blacklist penalty: Effective Value × (1 − Penalty% / 100)
                     </div>`;
                 return;
             }
+
+            // Display version in footer
+            const vEl = document.getElementById('footerVersion');
+            if (vEl) vEl.textContent = `v${APP_VERSION}`;
 
             // Prevent default drag behavior on document (so files don't open in browser)
             document.addEventListener('dragover', (e) => e.preventDefault());
