@@ -1467,7 +1467,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.3.2';
+        const APP_VERSION   = '1.3.3';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -1546,6 +1546,12 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             });
             startEl.addEventListener('change', function() {
                 delete this.dataset.programmatic;
+                // Constrain end date and auto-open its picker
+                endEl.min = this.value;
+                if (!endEl.value || endEl.value < this.value) {
+                    endEl.value = this.value;
+                }
+                try { endEl.showPicker(); } catch(e) { endEl.focus(); }
             });
             startEl.addEventListener('blur', function() {
                 if (this.dataset.programmatic) {
