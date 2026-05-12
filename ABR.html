@@ -742,6 +742,67 @@
             accent-color: var(--gold);
         }
 
+        .optimizer-section {
+            border-top: 1px solid var(--gray-700);
+            padding-top: 20px;
+        }
+
+        .optimizer-toggle-row {
+            margin-bottom: 6px;
+        }
+
+        .optimizer-inputs {
+            background: var(--gray-800);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-top: 8px;
+            margin-bottom: 4px;
+        }
+
+        .optimizer-inputs .date-range-inputs {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .optimizer-col {
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--gray-300);
+        }
+
+        .optimizer-col .opt-line {
+            display: block;
+        }
+
+        .optimizer-col .opt-award {
+            color: var(--gold);
+            font-weight: 600;
+        }
+
+        .optimizer-col .opt-slide {
+            color: #7dd3fc;
+        }
+
+        .optimizer-col .opt-partial {
+            color: #f97316;
+        }
+
+        .optimizer-col .opt-good {
+            color: #4ade80;
+        }
+
+        .optimizer-col .opt-buffer {
+            color: var(--gray-400);
+            font-style: italic;
+        }
+
+        th.guarantee-col.dimmed,
+        td.guarantee-col.dimmed {
+            opacity: 0.35;
+        }
+
         .linetype-checks {
             display: flex;
             gap: 16px;
@@ -1283,6 +1344,60 @@
                     </div>
                 </div>
             </div>
+
+            <div class="optimizer-section" style="margin-top: 24px;">
+                <div class="label-row" style="margin-bottom:12px;">
+                    <label class="section-label" style="margin-bottom:0;">Optimizer Modes</label>
+                    <button class="tooltip-icon" onclick="toggleTooltip('tt-optimizer')" aria-label="Help">i</button>
+                    <span class="tooltip-bubble" id="tt-optimizer">Optional — activate when you have training or vacation in the bid month. When active, bidline guarantee goes to zero and lines are ranked by effective days off instead.</span>
+                </div>
+
+                <div class="optimizer-toggle-row">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="trainingToggle" onchange="toggleOptimizerInputs('training')">
+                        <span style="font-weight:500;">Training Conflict</span>
+                    </label>
+                </div>
+                <div id="trainingInputs" class="optimizer-inputs" style="display:none;">
+                    <div class="optimizer-inputs-inner">
+                        <div class="date-range-inputs">
+                            <div class="form-group">
+                                <label>Training Start</label>
+                                <input type="date" id="trainStart">
+                            </div>
+                            <span class="date-range-separator">to</span>
+                            <div class="form-group">
+                                <label>Training End</label>
+                                <input type="date" id="trainEnd">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin-top:8px;">Lines ranked by workdays overlapping training. Buffer days (1–2 workdays adjacent to training) are flagged as practical — not guaranteed — days off.</div>
+                </div>
+
+                <div class="optimizer-toggle-row" style="margin-top:12px;">
+                    <label class="toggle-label">
+                        <input type="checkbox" id="vacationToggle" onchange="toggleOptimizerInputs('vacation')">
+                        <span style="font-weight:500;">Vacation Slide</span>
+                    </label>
+                </div>
+                <div id="vacationInputs" class="optimizer-inputs" style="display:none;">
+                    <div class="optimizer-inputs-inner">
+                        <div class="date-range-inputs">
+                            <div class="form-group">
+                                <label>Vacation Start</label>
+                                <input type="date" id="vacStart">
+                            </div>
+                            <span class="date-range-separator">to</span>
+                            <div class="form-group">
+                                <label>Vacation End</label>
+                                <input type="date" id="vacEnd">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-hint" style="margin-top:8px;">Lines ranked by total effective days off (natural + vacation-covered workdays + Award Days). Optimal slide within CBA rules computed automatically.</div>
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -1330,28 +1445,29 @@
                 <div class="results-table-container">
                     <table class="results-table">
                         <colgroup>
-                            <col style="width:5%">   <!-- Rank -->
+                            <col style="width:4%">   <!-- Rank -->
                             <col style="width:6%">   <!-- Line # -->
-                            <col style="width:12%">  <!-- Type -->
-                            <col style="width:8%">   <!-- Guarantee -->
+                            <col style="width:11%">  <!-- Type -->
+                            <col style="width:7%">   <!-- Guarantee -->
                             <col style="width:6%">   <!-- Days Off -->
-                            <col style="width:9%">   <!-- Effective Value -->
-                            <col style="width:6%">   <!-- Front DH -->
-                            <col style="width:6%">   <!-- Back DH -->
-                            <col style="width:19%">  <!-- Trips -->
-                            <col style="width:23%">  <!-- Airports -->
+                            <col style="width:8%">   <!-- Effective Value -->
+                            <col style="width:5%">   <!-- Front DH -->
+                            <col style="width:5%">   <!-- Back DH -->
+                            <col style="width:16%">  <!-- Trips -->
+                            <col style="width:10%">  <!-- Optimizer -->
+                            <col style="width:22%">  <!-- Airports -->
                         </colgroup>
                         <thead>
                             <tr>
                                 <th>Rank</th>
                                 <th class="sortable" data-sort="line">Line #</th>
                                 <th>Type</th>
-                                <th class="sortable" data-sort="guarantee">Avg Guarantee (hrs)</th>
-                                <th class="sortable" data-sort="daysOff">Avg Days Off</th>
-                                <th class="sortable" data-sort="effectiveValue">
-                                    <div class="label-row">Eff. Value
+                                <th id="th-guarantee" class="sortable guarantee-col" data-sort="guarantee">Avg Guarantee (hrs)</th>
+                                <th id="th-daysoff" class="sortable" data-sort="daysOff">Avg Days Off</th>
+                                <th id="th-effval" class="sortable" data-sort="effectiveValue">
+                                    <div class="label-row"><span id="effval-label">Eff. Value</span>
                                         <button class="tooltip-icon" onclick="toggleTooltip('tt-effval'); event.stopPropagation();" aria-label="Help">i</button>
-                                        <span class="tooltip-bubble" id="tt-effval">Composite ranking score.<br><strong>Avg Guarantee + ((Avg Days Off − Group Avg) × Day Off Value)</strong><br>Airport preferences apply a bonus or penalty on top.</span>
+                                        <span class="tooltip-bubble" id="tt-effval">Composite ranking score.<br><strong>Avg Guarantee + ((Avg Days Off − Group Avg) × Day Off Value)</strong><br>Airport preferences apply a bonus or penalty on top.<br>In Optimizer mode: shows effective days off or training overlap score.</span>
                                     </div>
                                 </th>
                                 <th class="sortable" data-sort="frontDH">
@@ -1367,6 +1483,7 @@
                                     </div>
                                 </th>
                                 <th>Trips</th>
+                                <th id="th-optimizer">Optimizer</th>
                                 <th>Airports</th>
                             </tr>
                         </thead>
@@ -1467,7 +1584,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.3.3';
+        const APP_VERSION   = '1.4.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2552,6 +2669,143 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return { lines, startDate, endDate, allDates };
         }
 
+        // ── Optimizer helper functions ─────────────────────────────────────
+
+        function toggleOptimizerInputs(mode) {
+            const el = document.getElementById(mode === 'training' ? 'trainingInputs' : 'vacationInputs');
+            const checked = document.getElementById(mode === 'training' ? 'trainingToggle' : 'vacationToggle').checked;
+            el.style.display = checked ? 'block' : 'none';
+        }
+
+        // Returns true if `date` falls within any trip pairing on this line
+        function isWorkdayOnLine(date, trips) {
+            return trips.some(t => date >= t.start && date <= t.end);
+        }
+
+        // Compute training overlap and buffer days for a line
+        function computeTrainingScore(trips, trainStart, trainEnd) {
+            let overlapDays = 0;
+            let offDaysInTraining = 0;
+
+            const d = new Date(trainStart);
+            while (d <= trainEnd) {
+                if (isWorkdayOnLine(d, trips)) overlapDays++;
+                else offDaysInTraining++;
+                d.setDate(d.getDate() + 1);
+            }
+
+            let bufferDays = 0;
+            for (let offset = 1; offset <= 2; offset++) {
+                const before = new Date(trainStart);
+                before.setDate(before.getDate() - offset);
+                if (isWorkdayOnLine(before, trips)) bufferDays++;
+
+                const after = new Date(trainEnd);
+                after.setDate(after.getDate() + offset);
+                if (isWorkdayOnLine(after, trips)) bufferDays++;
+            }
+
+            const totalTrainingDays = Math.round((trainEnd - trainStart) / 86400000) + 1;
+            const isPartial = offDaysInTraining > 0 && overlapDays > 0;
+            const isNone = overlapDays === 0;
+
+            return { overlapDays, bufferDays, isPartial, isNone, totalTrainingDays };
+        }
+
+        // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays, effectiveDaysOff
+        function evalVacPosition(slideStart, slideEnd, trips, naturalOff) {
+            let awardDays = 0;
+            let vacWorkdays = 0;
+
+            for (const trip of trips) {
+                if (slideStart > trip.end || slideEnd < trip.start) continue;
+
+                // Days covered by vacation within this trip (all days in a trip are workdays)
+                const overlapStart = slideStart > trip.start ? slideStart : trip.start;
+                const overlapEnd   = slideEnd   < trip.end   ? slideEnd   : trip.end;
+                if (overlapStart <= overlapEnd) {
+                    vacWorkdays += Math.round((overlapEnd - overlapStart) / 86400000) + 1;
+                }
+
+                // Workdays before vacation in this trip
+                const daysBefore = slideStart > trip.start
+                    ? Math.round((slideStart - trip.start) / 86400000)
+                    : 0;
+
+                // Workdays after vacation in this trip
+                const daysAfter = slideEnd < trip.end
+                    ? Math.round((trip.end - slideEnd) / 86400000)
+                    : 0;
+
+                // Award Days: ≤3 workdays at either end of pairing (one set, take the better)
+                const awardA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
+                const awardB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
+                awardDays = Math.max(awardDays, awardA, awardB);
+            }
+
+            return {
+                awardDays,
+                vacWorkdays,
+                effectiveDaysOff: naturalOff + vacWorkdays + awardDays
+            };
+        }
+
+        // Find the optimal vacation slide within CBA anchor rule and return scoring
+        function computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd) {
+            const vacLength  = Math.round((vacEnd - vacStart) / 86400000) + 1;
+            const naturalOff = datesOff.filter(d => d <= scheduleEnd).length;
+
+            // Anchor rule: slid block must overlap at least 1 day of the original awarded dates
+            // → slideStart ∈ [vacStart-(vacLength-1), vacEnd]
+            const minStartMs = vacStart.getTime() - (vacLength - 1) * 86400000;
+            const maxStartMs = vacEnd.getTime();
+
+            let bestEff       = -1;
+            let bestAward     = 0;
+            let bestVacWork   = 0;
+            let bestSlideStart = null;
+            let bestSlideEnd   = null;
+
+            for (let ms = minStartMs; ms <= maxStartMs; ms += 86400000) {
+                const sStart = new Date(ms);
+                const sEnd   = new Date(ms + (vacLength - 1) * 86400000);
+
+                if (sEnd > scheduleEnd) continue; // don't slide past schedule
+
+                const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
+
+                if (r.effectiveDaysOff > bestEff ||
+                    (r.effectiveDaysOff === bestEff && r.awardDays > bestAward)) {
+                    bestEff        = r.effectiveDaysOff;
+                    bestAward      = r.awardDays;
+                    bestVacWork    = r.vacWorkdays;
+                    bestSlideStart = new Date(sStart);
+                    bestSlideEnd   = new Date(sEnd);
+                }
+            }
+
+            // Fallback: use original position if all slide positions were beyond schedule
+            if (bestEff < 0) {
+                const r = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
+                bestEff        = r.effectiveDaysOff;
+                bestAward      = r.awardDays;
+                bestVacWork    = r.vacWorkdays;
+                bestSlideStart = new Date(vacStart);
+                bestSlideEnd   = new Date(vacEnd);
+            }
+
+            const isSlid = bestSlideStart.getTime() !== vacStart.getTime();
+
+            return {
+                effectiveDaysOff:        bestEff,
+                awardDays:               bestAward,
+                vacWorkdays:             bestVacWork,
+                recommendedSlideStart:   isSlid ? bestSlideStart : null,
+                recommendedSlideEnd:     isSlid ? bestSlideEnd   : null,
+                naturalOff
+            };
+        }
+
         // Main processing function
         async function processDocuments() {
             hideStatus();
@@ -2590,6 +2844,37 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const filterSecondary = document.getElementById('filterSecondary').checked;
             const filterReserve   = document.getElementById('filterReserve').checked;
             const lineDurationFilter = document.getElementById('lineDurationFilter').value;
+
+            // Optimizer modes
+            const trainMode = document.getElementById('trainingToggle').checked;
+            const vacMode   = document.getElementById('vacationToggle').checked;
+
+            const trainStartVal = document.getElementById('trainStart').value;
+            const trainEndVal   = document.getElementById('trainEnd').value;
+            const vacStartVal   = document.getElementById('vacStart').value;
+            const vacEndVal     = document.getElementById('vacEnd').value;
+
+            const trainStart = trainMode && trainStartVal ? new Date(trainStartVal + 'T00:00:00') : null;
+            const trainEnd   = trainMode && trainEndVal   ? new Date(trainEndVal   + 'T00:00:00') : null;
+            const vacStart   = vacMode   && vacStartVal   ? new Date(vacStartVal   + 'T00:00:00') : null;
+            const vacEnd     = vacMode   && vacEndVal     ? new Date(vacEndVal     + 'T00:00:00') : null;
+
+            if (trainMode && (!trainStart || !trainEnd)) {
+                showStatus('Please enter both training start and end dates.', 'error');
+                return;
+            }
+            if (vacMode && (!vacStart || !vacEnd)) {
+                showStatus('Please enter both vacation start and end dates.', 'error');
+                return;
+            }
+            if (trainMode && trainEnd < trainStart) {
+                showStatus('Training end date must be on or after start date.', 'error');
+                return;
+            }
+            if (vacMode && vacEnd < vacStart) {
+                showStatus('Vacation end date must be on or after start date.', 'error');
+                return;
+            }
             
             // Show loading
             document.getElementById('loading').classList.add('visible');
@@ -2714,35 +2999,53 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         continue;
                     }
 
+                    // Compute optimizer scores early (needed for date filter below)
+                    const is60DayLine = creditInfo.lineType.includes('60-day');
+                    const _bps = bidPeriodStart || new Date();
+                    const _bpYear = _bps.getFullYear();
+                    const _bpMonth = _bps.getMonth();
+                    const defaultScheduleEnd = is60DayLine
+                        ? new Date(_bpYear, _bpMonth + 2, 1)
+                        : new Date(_bpYear, _bpMonth + 1, 1);
+                    const schedEnd = bidlineInfo ? (bidlineInfo.scheduleEnd || defaultScheduleEnd) : defaultScheduleEnd;
+
+                    let trainScore = null;
+                    let vacScore   = null;
+
+                    if (trainMode && trainStart && trainEnd && bidlineInfo) {
+                        trainScore = computeTrainingScore(bidlineInfo.trips || [], trainStart, trainEnd);
+                    }
+                    if (vacMode && vacStart && vacEnd && bidlineInfo) {
+                        vacScore = computeVacationScore(
+                            bidlineInfo.trips || [], bidlineInfo.datesOff || [],
+                            schedEnd, vacStart, vacEnd
+                        );
+                    }
+
                     // Check if all desired dates are off
                     // A date is "off" if either:
                     // 1. It has an X marker in the schedule (in datesOff)
                     // 2. It falls AFTER the line's schedule end date (no flying scheduled for that period)
+                    // 3. It falls within the optimal vacation window (when vacation mode is active)
                     // If no dates were specified, all lines pass this filter.
                     let allDatesOff = true;
 
-
                     if (desiredDates.length > 0) {
-                        const is60DayLine = creditInfo.lineType.includes('60-day');
-                        // Derive fallback schedule end from bidPeriodStart so this
-                        // stays correct across bid cycles (May → June 1, June → July 1, etc.)
-                        const _bps = bidPeriodStart || new Date();
-                        const _bpYear = _bps.getFullYear();
-                        const _bpMonth = _bps.getMonth();
-                        const defaultScheduleEnd = is60DayLine
-                            ? new Date(_bpYear, _bpMonth + 2, 1)
-                            : new Date(_bpYear, _bpMonth + 1, 1);
+                        // Determine vacation window (original or optimal slide) for filter credit
+                        const vacWinStart = vacScore && vacScore.recommendedSlideStart ? vacScore.recommendedSlideStart : vacStart;
+                        const vacWinEnd   = vacScore && vacScore.recommendedSlideEnd   ? vacScore.recommendedSlideEnd   : vacEnd;
 
                         if (bidlineInfo) {
-                            const scheduleEnd = bidlineInfo.scheduleEnd || defaultScheduleEnd;
                             for (const desiredDate of desiredDates) {
                                 const dateInSchedule = bidlineInfo.datesOff && bidlineInfo.datesOff.some(offDate =>
                                     offDate.getFullYear() === desiredDate.getFullYear() &&
                                     offDate.getMonth() === desiredDate.getMonth() &&
                                     offDate.getDate() === desiredDate.getDate()
                                 );
-                                const dateAfterScheduleEnd = desiredDate > scheduleEnd;
-                                if (!dateInSchedule && !dateAfterScheduleEnd) {
+                                const dateAfterScheduleEnd = desiredDate > schedEnd;
+                                const dateInVacWindow = vacMode && vacWinStart && vacWinEnd &&
+                                    desiredDate >= vacWinStart && desiredDate <= vacWinEnd;
+                                if (!dateInSchedule && !dateAfterScheduleEnd && !dateInVacWindow) {
                                     allDatesOff = false;
                                     break;
                                 }
@@ -2785,7 +3088,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                     // Apply contract minimum guarantee of 64 hours for any active line
                     const guarantee = Math.max(64, creditInfo.guarantee);
-                    candidates.push({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo });
+                    candidates.push({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore });
                 }
 
                 // Compute average days off across all candidates so each line is scored
@@ -2806,7 +3109,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // Airport bonus/penalty = (userPct/100) × valueRange × log₂(1 + matchCount)
                 // This keeps adjustments proportional to the competitive spread,
                 // with diminishing returns for each additional matched airport.
-                candidates.forEach(({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo }, i) => {
+                candidates.forEach(({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore }, i) => {
                     let effectiveValue = baseValues[i];
 
                     if (!airportPrefs.whitelist.absolute && airportPrefs.whitelist.airports.length > 0) {
@@ -2823,21 +3126,35 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         }
                     }
 
+                    // In optimizer mode, effectiveValue is replaced by the optimizer sort key
+                    // so existing sort/rank logic stays intact.
+                    let optimizerEffValue = effectiveValue;
+                    if (vacMode && vacScore) {
+                        optimizerEffValue = vacScore.effectiveDaysOff;
+                    } else if (trainMode && trainScore) {
+                        // Scale: overlap (primary) * 100 + bufferDays (secondary)
+                        optimizerEffValue = (trainScore.overlapDays * 100) + trainScore.bufferDays;
+                    }
+
                     results.push({
                         lineNum,
                         lineType: creditInfo.lineType,
                         guarantee,
                         daysOff: creditInfo.daysOff,
-                        effectiveValue,
+                        effectiveValue: (vacMode || trainMode) ? optimizerEffValue : effectiveValue,
                         airports: lineAirports,
                         frontDH: bidlineInfo ? (bidlineInfo.frontDH || 0) : 0,
-                        backDH: bidlineInfo ? (bidlineInfo.backDH || 0) : 0,
-                        trips: bidlineInfo ? (bidlineInfo.trips || []) : []
+                        backDH:  bidlineInfo ? (bidlineInfo.backDH  || 0) : 0,
+                        trips:   bidlineInfo ? (bidlineInfo.trips   || []) : [],
+                        trainScore,
+                        vacScore,
+                        vacMode,
+                        trainMode
                     });
                 });
-                
+
                 console.log(`Filtering complete: ${results.length} passed, ${excluded} excluded`);
-                
+
                 // Sort by effective value descending
                 results.sort((a, b) => b.effectiveValue - a.effectiveValue);
 
@@ -2907,47 +3224,118 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             }).join('<br>');
         }
 
+        // Format a Date as "Mon D" (e.g. "May 20")
+        function fmtDate(d) {
+            const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            return `${mon[d.getMonth()]} ${d.getDate()}`;
+        }
+
+        // Build the HTML for the Optimizer column cell
+        function formatOptimizerCell(result) {
+            const { trainMode, vacMode, trainScore, vacScore } = result;
+            if (!trainMode && !vacMode) return '<span style="color:var(--gray-600)">—</span>';
+
+            const lines = [];
+
+            if (trainMode && trainScore) {
+                if (trainScore.isNone) {
+                    lines.push('<span class="opt-line opt-good">Train: on off days ✓</span>');
+                } else if (trainScore.isPartial) {
+                    lines.push(`<span class="opt-line opt-partial">Train: ${trainScore.overlapDays}/${trainScore.totalTrainingDays} days ⚠ partial</span>`);
+                } else {
+                    lines.push(`<span class="opt-line opt-award">Train: ${trainScore.overlapDays}/${trainScore.totalTrainingDays} days</span>`);
+                }
+                if (trainScore.bufferDays > 0) {
+                    lines.push(`<span class="opt-line opt-buffer">Buffer: ${trainScore.bufferDays} (practical)</span>`);
+                }
+            }
+
+            if (vacMode && vacScore) {
+                if (vacScore.awardDays > 0) {
+                    lines.push(`<span class="opt-line opt-award">AWRD: ${vacScore.awardDays} day${vacScore.awardDays > 1 ? 's' : ''}</span>`);
+                } else if (vacScore.vacWorkdays > 0) {
+                    lines.push(`<span class="opt-line">Vac conflict: ${vacScore.vacWorkdays}d</span>`);
+                } else {
+                    lines.push('<span class="opt-line opt-good">No conflict</span>');
+                }
+                if (vacScore.recommendedSlideStart) {
+                    lines.push(`<span class="opt-line opt-slide">Slide: ${fmtDate(vacScore.recommendedSlideStart)}–${fmtDate(vacScore.recommendedSlideEnd)}</span>`);
+                }
+                lines.push(`<span class="opt-line" style="color:var(--gray-400)">Eff off: ${vacScore.effectiveDaysOff}</span>`);
+            }
+
+            return `<div class="optimizer-col">${lines.join('')}</div>`;
+        }
+
         // Display results in table
         function displayResults(results, excluded) {
             document.getElementById('resultsSection').classList.add('visible');
             document.getElementById('exportBtn').style.display = 'inline-flex';
-            
+
+            // Detect optimizer mode from first result (all results share the same mode)
+            const anyVac   = results.length > 0 && results[0].vacMode;
+            const anyTrain = results.length > 0 && results[0].trainMode;
+            const optMode  = anyVac || anyTrain;
+
+            // Update column headers and dimming for optimizer mode
+            const thGuarantee = document.getElementById('th-guarantee');
+            const effvalLabel  = document.getElementById('effval-label');
+            const thOptimizer  = document.getElementById('th-optimizer');
+            if (thGuarantee) thGuarantee.classList.toggle('dimmed', optMode);
+            if (effvalLabel) {
+                if (anyVac) effvalLabel.textContent = 'Eff. Days Off';
+                else if (anyTrain) effvalLabel.textContent = 'Train Score';
+                else effvalLabel.textContent = 'Eff. Value';
+            }
+            if (thOptimizer) thOptimizer.style.color = optMode ? 'var(--gold)' : '';
+
             // Update stats
             document.getElementById('totalCompatible').textContent = results.length;
             document.getElementById('totalExcluded').textContent = excluded;
-            document.getElementById('topValue').textContent = results.length > 0 ? 
-                results[0].effectiveValue.toFixed(2) : '0';
-            
+            const topVal = results.length > 0 ? results[0].effectiveValue : 0;
+            document.getElementById('topValue').textContent = optMode
+                ? (Number.isInteger(topVal) ? topVal : topVal.toFixed(0))
+                : topVal.toFixed(2);
+
             // Populate table
             const tbody = document.getElementById('resultsBody');
             tbody.innerHTML = '';
-            
+
             for (const result of results) {
                 const tr = document.createElement('tr');
-                
+
                 let rankClass = 'other';
                 if (result.rank <= 3) rankClass = 'top-3';
                 else if (result.rank <= 10) rankClass = 'top-10';
-                
+
+                const guaranteeCell = optMode
+                    ? `<td class="value-highlight guarantee-col dimmed" style="color:var(--gray-500)">—</td>`
+                    : `<td class="value-highlight guarantee-col">${result.guarantee.toFixed(2)}</td>`;
+
+                const effValDisplay = optMode
+                    ? (Number.isInteger(result.effectiveValue) ? result.effectiveValue : result.effectiveValue.toFixed(0))
+                    : result.effectiveValue.toFixed(2);
+
                 tr.innerHTML = `
                     <td><span class="rank-badge ${rankClass}">${result.rank}</span></td>
                     <td class="value-highlight">${result.lineNum}</td>
                     <td><span class="line-type">${result.lineType}</span></td>
-                    <td class="value-highlight">${result.guarantee.toFixed(2)}</td>
+                    ${guaranteeCell}
                     <td class="value-highlight">${result.daysOff}</td>
-                    <td class="value-highlight" style="color: var(--gold);">${result.effectiveValue.toFixed(2)}</td>
+                    <td class="value-highlight" style="color: var(--gold);">${effValDisplay}</td>
                     <td class="value-highlight">${result.frontDH || 0}</td>
                     <td class="value-highlight">${result.backDH || 0}</td>
                     <td class="trips-cell">${formatTripDates(result.trips)}</td>
+                    <td>${formatOptimizerCell(result)}</td>
                     <td class="airports-cell">${formatAirports(result.airports)}</td>
                 `;
-                
+
                 tbody.appendChild(tr);
             }
-            
+
             // Scroll to results
             document.getElementById('resultsSection').scrollIntoView({ behavior: 'smooth' });
-            
+
             if (results.length === 0) {
                 showStatus(lastDesiredDates.length > 0 ? 'No bidlines found that have all your desired dates off. Try different date ranges.' : 'No bidlines matched your filters.', 'info');
             } else {
@@ -2964,19 +3352,36 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 return;
             }
             
-            const headers = ['Rank', 'Line', 'Type', 'Avg Guarantee', 'Avg Days Off', 'Effective Value', 'Front DH', 'Back DH', 'Trips', 'Airports'];
-            const rows = rankedResults.map(r => [
-                r.rank,
-                r.lineNum,
-                r.lineType,
-                r.guarantee.toFixed(2),
-                r.daysOff,
-                r.effectiveValue.toFixed(2),
-                r.frontDH || 0,
-                r.backDH || 0,
-                `"${formatTripDates(r.trips).replace(/<br>/g, ' | ')}"`,
-                r.airports ? `"${formatAirports(r.airports).replace(/<br>/g, ', ')}"` : ''
-            ]);
+            const optMode = rankedResults.length > 0 && (rankedResults[0].vacMode || rankedResults[0].trainMode);
+            const effValHeader = rankedResults.length > 0 && rankedResults[0].vacMode ? 'Eff. Days Off'
+                : rankedResults.length > 0 && rankedResults[0].trainMode ? 'Train Score'
+                : 'Effective Value';
+            const headers = ['Rank', 'Line', 'Type', optMode ? 'Guarantee (N/A)' : 'Avg Guarantee', 'Avg Days Off', effValHeader, 'Front DH', 'Back DH', 'Trips', 'Optimizer', 'Airports'];
+            const rows = rankedResults.map(r => {
+                let optInfo = '';
+                if (r.vacMode && r.vacScore) {
+                    const slide = r.vacScore.recommendedSlideStart
+                        ? `Slide: ${fmtDate(r.vacScore.recommendedSlideStart)}-${fmtDate(r.vacScore.recommendedSlideEnd)}`
+                        : 'No slide';
+                    optInfo = `"AWRD:${r.vacScore.awardDays} | EffOff:${r.vacScore.effectiveDaysOff} | ${slide}"`;
+                } else if (r.trainMode && r.trainScore) {
+                    const compliance = r.trainScore.isNone ? 'off days' : r.trainScore.isPartial ? 'partial' : 'full';
+                    optInfo = `"Train:${r.trainScore.overlapDays}/${r.trainScore.totalTrainingDays}(${compliance}) Buffer:${r.trainScore.bufferDays}"`;
+                }
+                return [
+                    r.rank,
+                    r.lineNum,
+                    r.lineType,
+                    optMode ? 'N/A' : r.guarantee.toFixed(2),
+                    r.daysOff,
+                    Number.isInteger(r.effectiveValue) ? r.effectiveValue : r.effectiveValue.toFixed(2),
+                    r.frontDH || 0,
+                    r.backDH || 0,
+                    `"${formatTripDates(r.trips).replace(/<br>/g, ' | ')}"`,
+                    optInfo,
+                    r.airports ? `"${formatAirports(r.airports).replace(/<br>/g, ', ')}"` : ''
+                ];
+            });
             
             const csv = [
                 headers.join(','),
@@ -3020,7 +3425,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     return (aVal - bVal) * dir;
                 });
                 
-                // Re-rank based on effective value (keep original ranking logic)
+                // Re-rank based on effective value (accounts for optimizer mode)
                 const sortedByValue = [...rankedResults].sort((a, b) => b.effectiveValue - a.effectiveValue);
                 rankedResults.forEach(r => {
                     r.rank = sortedByValue.findIndex(s => s.lineNum === r.lineNum) + 1;
