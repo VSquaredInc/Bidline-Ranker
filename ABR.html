@@ -798,6 +798,15 @@
             font-style: italic;
         }
 
+        .optimizer-col .opt-period-label {
+            display: block;
+            color: var(--gray-300);
+            font-size: 0.75em;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            margin-top: 4px;
+        }
+
         th.guarantee-col.dimmed,
         td.guarantee-col.dimmed,
         th.daysoff-col.dimmed,
@@ -1386,20 +1395,26 @@
                     </label>
                 </div>
                 <div id="vacationInputs" class="optimizer-inputs" style="display:none;">
-                    <div class="optimizer-inputs-inner">
-                        <div class="date-range-inputs">
-                            <div class="form-group">
-                                <label>Awarded Vacation Start</label>
-                                <input type="date" id="vacStart">
+                    <div id="vacRangesContainer">
+                        <div class="date-range-row" data-vac-range-id="1">
+                            <div class="date-range-inputs">
+                                <div class="form-group">
+                                    <label>Awarded Vacation Start</label>
+                                    <input type="date" class="vac-range-start">
+                                </div>
+                                <span class="date-range-separator">to</span>
+                                <div class="form-group">
+                                    <label>Awarded Vacation End</label>
+                                    <input type="date" class="vac-range-end">
+                                </div>
                             </div>
-                            <span class="date-range-separator">to</span>
-                            <div class="form-group">
-                                <label>Awarded Vacation End</label>
-                                <input type="date" id="vacEnd">
-                            </div>
+                            <button type="button" class="btn-remove-range" onclick="removeVacationRange(1)" title="Remove this vacation period" style="visibility:hidden;">✕</button>
                         </div>
                     </div>
-                    <div class="form-hint" style="margin-top:8px;">Lines ranked by total effective days off (natural + vacation-covered workdays + Award Days). Optimal slide within CBA rules computed automatically.</div>
+                    <button type="button" class="btn-add-range" onclick="addVacationRange()" style="margin-top:8px;">
+                        <span>+</span> Add Another Vacation Period
+                    </button>
+                    <div class="form-hint" style="margin-top:8px;">Add one row per awarded vacation week. Each is optimally slid independently; rankings use the combined effective days off. Optimal slide within CBA rules computed automatically.</div>
                 </div>
             </div>
         </div>
@@ -1588,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.4.0';
+        const APP_VERSION   = '1.5.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -1850,6 +1865,15 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
             if (whitelistAbsolute) whitelistAbsolute.addEventListener('change', updateAdjustmentVisibility);
             if (blacklistAbsolute) blacklistAbsolute.addEventListener('change', updateAdjustmentVisibility);
+
+            // Wire auto-advance date selection for training and initial vacation inputs
+            setupDateRangeInputs(
+                document.getElementById('trainStart'),
+                document.getElementById('trainEnd')
+            );
+            const firstVacStart = document.querySelector('#vacRangesContainer .vac-range-start');
+            const firstVacEnd   = document.querySelector('#vacRangesContainer .vac-range-end');
+            if (firstVacStart && firstVacEnd) setupDateRangeInputs(firstVacStart, firstVacEnd);
         });
 
         // File upload handlers
@@ -2675,6 +2699,117 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Optimizer helper functions ─────────────────────────────────────
 
+        // ── Period boundary helpers ────────────────────────────────────────────
+
+        // Returns the first day of BP2 (second bid period).
+        // Standard: first day of the month following bidPeriodStart.
+        // Feb exception: bidPeriodStart is Jan 31, so BP2 starts March 1 (skip Feb).
+        function getBp2Start(bps) {
+            if (!bps) return null;
+            const offset = bps.getDate() === 1 ? 1 : 2;
+            return new Date(bps.getFullYear(), bps.getMonth() + offset, 1);
+        }
+
+        // Merge overlapping/adjacent {start,end} Date intervals into a sorted non-overlapping array
+        function mergeIntervals(windows) {
+            if (!windows || windows.length === 0) return [];
+            const sorted = [...windows].sort((a, b) => a.start - b.start);
+            const merged = [{ start: new Date(sorted[0].start), end: new Date(sorted[0].end) }];
+            for (let i = 1; i < sorted.length; i++) {
+                const last = merged[merged.length - 1];
+                const dayAfterLast = new Date(last.end.getTime() + 86400000);
+                if (sorted[i].start <= dayAfterLast) {
+                    if (sorted[i].end > last.end) last.end = new Date(sorted[i].end);
+                } else {
+                    merged.push({ start: new Date(sorted[i].start), end: new Date(sorted[i].end) });
+                }
+            }
+            return merged;
+        }
+
+        // Compute vacation workday coverage and award days for a set of trips (one period)
+        // given the union of all slid vacation windows.
+        function evalVacContribForPeriod(trips, unionWindows) {
+            let vacWorkdays = 0, awardDays = 0;
+            for (const trip of trips) {
+                const overlapping = unionWindows.filter(w => w.start <= trip.end && w.end >= trip.start);
+                if (overlapping.length === 0) continue;
+                // Clip each window to trip bounds and merge
+                const covered = mergeIntervals(overlapping.map(w => ({
+                    start: w.start > trip.start ? w.start : trip.start,
+                    end:   w.end   < trip.end   ? w.end   : trip.end
+                })));
+                for (const ci of covered) {
+                    vacWorkdays += Math.round((ci.end - ci.start) / 86400000) + 1;
+                }
+                // Award Days from uncovered workdays at trip edges
+                const firstStart = covered[0].start;
+                const lastEnd    = covered[covered.length - 1].end;
+                const daysBefore = firstStart > trip.start ? Math.round((firstStart - trip.start) / 86400000) : 0;
+                const daysAfter  = lastEnd    < trip.end   ? Math.round((trip.end  - lastEnd)    / 86400000) : 0;
+                const aA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
+                const aB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
+                awardDays = Math.max(awardDays, aA, aB);
+            }
+            return { vacWorkdays, awardDays };
+        }
+
+        // ── Vacation range management ──────────────────────────────────────────
+
+        let nextVacRangeId = 2;
+
+        function addVacationRange() {
+            const container = document.getElementById('vacRangesContainer');
+            const rangeId = nextVacRangeId++;
+            const row = document.createElement('div');
+            row.className = 'date-range-row';
+            row.dataset.vacRangeId = rangeId;
+            row.innerHTML = `
+                <div class="date-range-inputs">
+                    <div class="form-group">
+                        <label>Awarded Vacation Start</label>
+                        <input type="date" class="vac-range-start">
+                    </div>
+                    <span class="date-range-separator">to</span>
+                    <div class="form-group">
+                        <label>Awarded Vacation End</label>
+                        <input type="date" class="vac-range-end">
+                    </div>
+                </div>
+                <button type="button" class="btn-remove-range" onclick="removeVacationRange(${rangeId})" title="Remove this vacation period">✕</button>
+            `;
+            container.appendChild(row);
+            updateVacRemoveButtons();
+            setupDateRangeInputs(row.querySelector('.vac-range-start'), row.querySelector('.vac-range-end'));
+        }
+
+        function removeVacationRange(rangeId) {
+            const row = document.querySelector(`#vacRangesContainer .date-range-row[data-vac-range-id="${rangeId}"]`);
+            if (row) { row.remove(); updateVacRemoveButtons(); }
+        }
+
+        function updateVacRemoveButtons() {
+            const rows = document.querySelectorAll('#vacRangesContainer .date-range-row');
+            rows.forEach(row => {
+                const btn = row.querySelector('.btn-remove-range');
+                if (btn) btn.style.visibility = rows.length === 1 ? 'hidden' : 'visible';
+            });
+        }
+
+        function getVacationRanges() {
+            const ranges = [];
+            document.querySelectorAll('#vacRangesContainer .date-range-row').forEach(row => {
+                const s = row.querySelector('.vac-range-start');
+                const e = row.querySelector('.vac-range-end');
+                if (s && e && s.value && e.value) {
+                    const start = new Date(s.value + 'T00:00:00');
+                    const end   = new Date(e.value + 'T00:00:00');
+                    if (end >= start) ranges.push({ start, end });
+                }
+            });
+            return ranges;
+        }
+
         function toggleOptimizerInputs(mode) {
             const el = document.getElementById(mode === 'training' ? 'trainingInputs' : 'vacationInputs');
             const checked = document.getElementById(mode === 'training' ? 'trainingToggle' : 'vacationToggle').checked;
@@ -2855,30 +2990,28 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
             const trainStartVal = document.getElementById('trainStart').value;
             const trainEndVal   = document.getElementById('trainEnd').value;
-            const vacStartVal   = document.getElementById('vacStart').value;
-            const vacEndVal     = document.getElementById('vacEnd').value;
-
             const trainStart = trainMode && trainStartVal ? new Date(trainStartVal + 'T00:00:00') : null;
             const trainEnd   = trainMode && trainEndVal   ? new Date(trainEndVal   + 'T00:00:00') : null;
-            const vacStart   = vacMode   && vacStartVal   ? new Date(vacStartVal   + 'T00:00:00') : null;
-            const vacEnd     = vacMode   && vacEndVal     ? new Date(vacEndVal     + 'T00:00:00') : null;
+
+            const vacationRanges = vacMode ? getVacationRanges() : [];
 
             if (trainMode && (!trainStart || !trainEnd)) {
                 showStatus('Please enter both training start and end dates.', 'error');
-                return;
-            }
-            if (vacMode && (!vacStart || !vacEnd)) {
-                showStatus('Please enter both vacation start and end dates.', 'error');
                 return;
             }
             if (trainMode && trainEnd < trainStart) {
                 showStatus('Training end date must be on or after start date.', 'error');
                 return;
             }
-            if (vacMode && vacEnd < vacStart) {
-                showStatus('Vacation end date must be on or after start date.', 'error');
+            if (vacMode && vacationRanges.length === 0) {
+                showStatus('Please enter at least one vacation date range.', 'error');
                 return;
             }
+
+            // BP1/BP2 boundary — computed after PDF is loaded, but we need it for scoring.
+            // bidPeriodStart is populated during parseBidlineWithPositions, so we derive
+            // bp2Start after parsing. Set a placeholder here; overwrite after parse.
+            let bp2Start = null; // set after parse below
             
             // Show loading
             document.getElementById('loading').classList.add('visible');
@@ -2938,6 +3071,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // Also try position-based parsing for more accurate date detection
                 const { lines: bidlinePositions, meta: bidlineMeta } = await parseBidlineWithPositions(bidlineFile);
 
+                // Now that bidPeriodStart is populated, compute the BP1/BP2 boundary
+                bp2Start = getBp2Start(bidPeriodStart);
+
                 // Merge credit data (average guarantees for 60-day lines)
                 const mergedCredit = {};
                 const allLineNums = new Set([...Object.keys(credit1Data), ...Object.keys(credit2Data)]);
@@ -2947,17 +3083,32 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const c2 = credit2Data[lineNum];
                     
                     if (c1 && c2) {
-                        // Average the values
                         mergedCredit[lineNum] = {
                             lineNum,
                             lineType: c1.lineType,
                             guarantee: (c1.guarantee + c2.guarantee) / 2,
-                            daysOff: (c1.daysOff + c2.daysOff) / 2
+                            daysOff: (c1.daysOff + c2.daysOff) / 2,
+                            bp1Guarantee: c1.guarantee,
+                            bp1DaysOff:   c1.daysOff,
+                            bp2Guarantee: c2.guarantee,
+                            bp2DaysOff:   c2.daysOff
                         };
                     } else if (c1) {
-                        mergedCredit[lineNum] = c1;
+                        mergedCredit[lineNum] = {
+                            ...c1,
+                            bp1Guarantee: c1.guarantee,
+                            bp1DaysOff:   c1.daysOff,
+                            bp2Guarantee: null,
+                            bp2DaysOff:   null
+                        };
                     } else if (c2) {
-                        mergedCredit[lineNum] = c2;
+                        mergedCredit[lineNum] = {
+                            ...c2,
+                            bp1Guarantee: null,
+                            bp1DaysOff:   null,
+                            bp2Guarantee: c2.guarantee,
+                            bp2DaysOff:   c2.daysOff
+                        };
                     }
                 }
                 
@@ -3013,17 +3164,79 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         : new Date(_bpYear, _bpMonth + 1, 1);
                     const schedEnd = bidlineInfo ? (bidlineInfo.scheduleEnd || defaultScheduleEnd) : defaultScheduleEnd;
 
+                    const lineTrips   = bidlineInfo ? (bidlineInfo.trips   || []) : [];
+                    const lineDatesOff = bidlineInfo ? (bidlineInfo.datesOff || []) : [];
+
+                    // Partition trips and off-days by bid period
+                    const tripsBP1    = bp2Start ? lineTrips.filter(t => t.start < bp2Start)    : lineTrips;
+                    const tripsBP2    = bp2Start ? lineTrips.filter(t => t.start >= bp2Start)   : [];
+                    const datesOffBP1 = bp2Start ? lineDatesOff.filter(d => d < bp2Start)       : lineDatesOff;
+                    const datesOffBP2 = bp2Start ? lineDatesOff.filter(d => d >= bp2Start && d <= schedEnd) : [];
+
                     let trainScore = null;
                     let vacScore   = null;
+                    let slidUnionWindows = []; // union of all optimal vacation windows for this line
 
-                    if (trainMode && trainStart && trainEnd && bidlineInfo) {
-                        trainScore = computeTrainingScore(bidlineInfo.trips || [], trainStart, trainEnd);
+                    // ── Training per-period scoring ──────────────────────────────
+                    if (trainMode && trainStart && trainEnd) {
+                        const periodEnd1 = bp2Start ? new Date(bp2Start.getTime() - 86400000) : schedEnd;
+                        const trainInBP1 = trainStart <= periodEnd1;
+                        const trainInBP2 = bp2Start && trainEnd >= bp2Start;
+
+                        const tsBP1 = trainInBP1
+                            ? computeTrainingScore(tripsBP1,
+                                trainStart,
+                                (trainEnd <= periodEnd1) ? trainEnd : periodEnd1)
+                            : null;
+                        const tsBP2 = trainInBP2
+                            ? computeTrainingScore(tripsBP2,
+                                (trainStart >= bp2Start) ? trainStart : bp2Start,
+                                trainEnd)
+                            : null;
+
+                        // Overall for display
+                        const overall = computeTrainingScore(lineTrips, trainStart, trainEnd);
+                        trainScore = { ...overall, trainScoreBP1: tsBP1, trainScoreBP2: tsBP2 };
                     }
-                    if (vacMode && vacStart && vacEnd && bidlineInfo) {
-                        vacScore = computeVacationScore(
-                            bidlineInfo.trips || [], bidlineInfo.datesOff || [],
-                            schedEnd, vacStart, vacEnd
+
+                    // ── Vacation per-period scoring ──────────────────────────────
+                    if (vacMode && vacationRanges.length > 0 && bidlineInfo) {
+                        // Optimise each vacation range independently using ALL trips
+                        const rangeScores = vacationRanges.map(vr =>
+                            computeVacationScore(lineTrips, lineDatesOff, schedEnd, vr.start, vr.end)
                         );
+
+                        // Build optimal slid windows and union them
+                        const slidWindows = rangeScores.map((rs, i) => ({
+                            start: rs.recommendedSlideStart || vacationRanges[i].start,
+                            end:   rs.recommendedSlideEnd   || vacationRanges[i].end
+                        }));
+                        slidUnionWindows = mergeIntervals(slidWindows);
+
+                        // Per-period contributions from union windows
+                        const vcBP1 = evalVacContribForPeriod(tripsBP1, slidUnionWindows);
+                        const vcBP2 = evalVacContribForPeriod(tripsBP2, slidUnionWindows);
+
+                        const effBP1 = datesOffBP1.length + vcBP1.vacWorkdays + vcBP1.awardDays;
+                        const effBP2 = datesOffBP2.length + vcBP2.vacWorkdays + vcBP2.awardDays;
+
+                        vacScore = {
+                            // Totals for display / backward compat
+                            awardDays:   vcBP1.awardDays + vcBP2.awardDays,
+                            vacWorkdays: vcBP1.vacWorkdays + vcBP2.vacWorkdays,
+                            effectiveDaysOff: effBP1 + effBP2,
+                            // Per-period detail
+                            effDaysOffBP1: effBP1,
+                            effDaysOffBP2: effBP2,
+                            vacContribBP1: vcBP1,
+                            vacContribBP2: vcBP2,
+                            // Slide display (show first range's slide if one exists)
+                            recommendedSlideStart: slidWindows[0]?.start || null,
+                            recommendedSlideEnd:   slidWindows[0]?.end   || null,
+                            slidUnionWindows,
+                            rangeScores,
+                            slidWindows
+                        };
                     }
 
                     // Check if all desired dates are off
@@ -3092,7 +3305,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                     // Apply contract minimum guarantee of 64 hours for any active line
                     const guarantee = Math.max(64, creditInfo.guarantee);
-                    candidates.push({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore });
+                    candidates.push({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore, nativeDaysOffBP1: datesOffBP1.length, nativeDaysOffBP2: datesOffBP2.length });
                 }
 
                 // Compute average days off across all candidates so each line is scored
@@ -3113,7 +3326,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // Airport bonus/penalty = (userPct/100) × valueRange × log₂(1 + matchCount)
                 // This keeps adjustments proportional to the competitive spread,
                 // with diminishing returns for each additional matched airport.
-                candidates.forEach(({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore }, i) => {
+                candidates.forEach(({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore, nativeDaysOffBP1, nativeDaysOffBP2 }, i) => {
                     let effectiveValue = baseValues[i];
 
                     if (!airportPrefs.whitelist.absolute && airportPrefs.whitelist.airports.length > 0) {
@@ -3130,19 +3343,45 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         }
                     }
 
-                    // In optimizer mode, effectiveValue is replaced by the optimizer sort key
-                    // so existing sort/rank logic stays intact.
+                    // Per-period hybrid scoring in conflict mode
                     let optimizerEffValue = effectiveValue;
-                    if (vacMode && vacScore) {
-                        optimizerEffValue = vacScore.effectiveDaysOff;
-                    } else if (trainMode && trainScore) {
-                        // Scale: overlap (primary) * 100 + bufferDays (secondary)
-                        optimizerEffValue = (trainScore.overlapDays * 100) + trainScore.bufferDays;
+                    let bp1Conflicted = false, bp2Conflicted = false;
+                    let effDaysOffBP1 = nativeDaysOffBP1 || 0;
+                    let effDaysOffBP2 = nativeDaysOffBP2 || 0;
+
+                    if (vacMode || trainMode) {
+                        const conflictDayValue = Math.max(dayOffValue, 4.85);
+                        const is60Day = creditInfo.lineType.includes('60-day');
+
+                        const bp1VacConflicted = vacScore && ((vacScore.vacContribBP1?.vacWorkdays > 0) || (vacScore.vacContribBP1?.awardDays > 0));
+                        const bp2VacConflicted = vacScore && ((vacScore.vacContribBP2?.vacWorkdays > 0) || (vacScore.vacContribBP2?.awardDays > 0));
+                        const bp1TrainConflicted = trainScore && trainScore.trainScoreBP1 && !trainScore.trainScoreBP1.isNone;
+                        const bp2TrainConflicted = trainScore && trainScore.trainScoreBP2 && !trainScore.trainScoreBP2.isNone;
+                        bp1Conflicted = bp1VacConflicted || bp1TrainConflicted;
+                        bp2Conflicted = is60Day && (bp2VacConflicted || bp2TrainConflicted);
+
+                        effDaysOffBP1 = (vacScore?.effDaysOffBP1 ?? (nativeDaysOffBP1 || 0)) + (trainScore?.trainScoreBP1?.overlapDays ?? 0);
+                        effDaysOffBP2 = (vacScore?.effDaysOffBP2 ?? (nativeDaysOffBP2 || 0)) + (trainScore?.trainScoreBP2?.overlapDays ?? 0);
+
+                        const bp1G  = creditInfo.bp1Guarantee  ?? creditInfo.guarantee;
+                        const bp2G  = creditInfo.bp2Guarantee  ?? creditInfo.guarantee;
+                        const bp1DO = creditInfo.bp1DaysOff    ?? creditInfo.daysOff;
+                        const bp2DO = creditInfo.bp2DaysOff    ?? creditInfo.daysOff;
+
+                        const bp1Score = bp1Conflicted
+                            ? effDaysOffBP1 * conflictDayValue
+                            : bp1G + (bp1DO - avgDaysOff) * dayOffValue;
+                        const bp2Score = (is60Day && creditInfo.bp2Guarantee != null)
+                            ? (bp2Conflicted ? effDaysOffBP2 * conflictDayValue : bp2G + (bp2DO - avgDaysOff) * dayOffValue)
+                            : null;
+
+                        optimizerEffValue = bp2Score !== null ? (bp1Score + bp2Score) / 2 : bp1Score;
                     }
 
                     const rawTrips = bidlineInfo ? (bidlineInfo.trips || []) : [];
+                    const slidUnionWins = vacScore ? (vacScore.slidUnionWindows || []) : [];
                     const modifiedTrips = (vacMode || trainMode)
-                        ? computeModifiedTrips(rawTrips, vacScore, vacStart, vacEnd, trainStart, trainEnd)
+                        ? computeModifiedTrips(rawTrips, slidUnionWins, trainStart, trainEnd)
                         : null;
 
                     results.push({
@@ -3159,7 +3398,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         trainScore,
                         vacScore,
                         vacMode,
-                        trainMode
+                        trainMode,
+                        bp1Conflicted,
+                        bp2Conflicted,
+                        effDaysOffBP1,
+                        effDaysOffBP2
                     });
                 });
 
@@ -3240,51 +3483,33 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return `${mon[d.getMonth()]} ${d.getDate()}`;
         }
 
-        // Compute modified trip segments after removing vacation window, award days, and training window.
-        // Returns an array of {start, end} Date pairs representing actual flying segments.
-        function computeModifiedTrips(originalTrips, vacScore, vacStart, vacEnd, trainStart, trainEnd) {
-            const actualVacStart = vacScore && vacScore.recommendedSlideStart ? vacScore.recommendedSlideStart : (vacStart || null);
-            const actualVacEnd   = vacScore && vacScore.recommendedSlideEnd   ? vacScore.recommendedSlideEnd   : (vacEnd   || null);
-
+        // Compute modified trip segments after removing slid vacation windows, award days, and training window.
+        // slidUnionWindows: merged array of {start,end} covering all slid vacation ranges.
+        function computeModifiedTrips(originalTrips, slidUnionWindows, trainStart, trainEnd) {
             const modifiedTrips = [];
+            const hasVac = slidUnionWindows && slidUnionWindows.length > 0;
 
             for (const trip of originalTrips) {
-                const excl = []; // date ranges to exclude from this trip
+                const excl = [];
 
-                // Vacation window
-                if (actualVacStart && actualVacEnd && actualVacStart <= trip.end && actualVacEnd >= trip.start) {
-                    const exS = actualVacStart > trip.start ? actualVacStart : trip.start;
-                    const exE = actualVacEnd   < trip.end   ? actualVacEnd   : trip.end;
-                    excl.push({ start: new Date(exS), end: new Date(exE) });
-
-                    // Award days: re-derive which end they fall on, then exclude those days too
-                    if (vacScore && vacScore.awardDays > 0) {
-                        const daysBefore = actualVacStart > trip.start
-                            ? Math.round((actualVacStart - trip.start) / 86400000) : 0;
-                        const daysAfter  = actualVacEnd   < trip.end
-                            ? Math.round((trip.end - actualVacEnd) / 86400000) : 0;
-                        const awardA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
-                        const awardB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
-
-                        if (awardB >= awardA && awardB > 0) {
-                            // Award days at end of trip
-                            const awdStart = new Date(trip.end);
-                            awdStart.setDate(awdStart.getDate() - (awardB - 1));
-                            excl.push({ start: awdStart, end: new Date(trip.end) });
-                        } else if (awardA > 0) {
-                            // Award days at start of trip
-                            const awdEnd = new Date(trip.start);
-                            awdEnd.setDate(awdEnd.getDate() + (awardA - 1));
-                            excl.push({ start: new Date(trip.start), end: awdEnd });
+                // Vacation union windows clipped to trip
+                if (hasVac) {
+                    for (const w of slidUnionWindows) {
+                        if (w.start <= trip.end && w.end >= trip.start) {
+                            excl.push({
+                                start: new Date(Math.max(w.start.getTime(), trip.start.getTime())),
+                                end:   new Date(Math.min(w.end.getTime(),   trip.end.getTime()))
+                            });
                         }
                     }
                 }
 
-                // Training window
+                // Training window clipped to trip
                 if (trainStart && trainEnd && trainStart <= trip.end && trainEnd >= trip.start) {
-                    const exS = trainStart > trip.start ? trainStart : trip.start;
-                    const exE = trainEnd   < trip.end   ? trainEnd   : trip.end;
-                    excl.push({ start: new Date(exS), end: new Date(exE) });
+                    excl.push({
+                        start: new Date(Math.max(trainStart.getTime(), trip.start.getTime())),
+                        end:   new Date(Math.min(trainEnd.getTime(),   trip.end.getTime()))
+                    });
                 }
 
                 if (excl.length === 0) {
@@ -3292,16 +3517,49 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     continue;
                 }
 
-                // Sort and merge overlapping exclusion ranges
+                // Sort and merge exclusion ranges
                 excl.sort((a, b) => a.start - b.start);
                 const merged = [{ start: new Date(excl[0].start), end: new Date(excl[0].end) }];
-                for (let i = 1; i < excl.length; i++) {
+                for (let j = 1; j < excl.length; j++) {
                     const last = merged[merged.length - 1];
-                    const nextAfterLast = new Date(last.end); nextAfterLast.setDate(nextAfterLast.getDate() + 1);
-                    if (excl[i].start <= nextAfterLast) {
-                        if (excl[i].end > last.end) last.end = new Date(excl[i].end);
+                    const nextAfterLast = new Date(last.end.getTime() + 86400000);
+                    if (excl[j].start <= nextAfterLast) {
+                        if (excl[j].end > last.end) last.end = new Date(excl[j].end);
                     } else {
-                        merged.push({ start: new Date(excl[i].start), end: new Date(excl[i].end) });
+                        merged.push({ start: new Date(excl[j].start), end: new Date(excl[j].end) });
+                    }
+                }
+
+                // Award days (vacation only): if ≤3 workdays remain at either end of the
+                // combined exclusion zone, those also become paid days off — exclude them too.
+                if (hasVac) {
+                    const firstEx = merged[0];
+                    const lastEx  = merged[merged.length - 1];
+                    const daysBefore = firstEx.start > trip.start
+                        ? Math.round((firstEx.start.getTime() - trip.start.getTime()) / 86400000) : 0;
+                    const daysAfter  = lastEx.end < trip.end
+                        ? Math.round((trip.end.getTime() - lastEx.end.getTime()) / 86400000) : 0;
+                    const awardA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
+                    const awardB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
+                    if (awardB >= awardA && awardB > 0) {
+                        merged.push({
+                            start: new Date(trip.end.getTime() - (awardB - 1) * 86400000),
+                            end:   new Date(trip.end)
+                        });
+                    } else if (awardA > 0) {
+                        merged.unshift({
+                            start: new Date(trip.start),
+                            end:   new Date(trip.start.getTime() + (awardA - 1) * 86400000)
+                        });
+                    }
+                    // Re-sort and collapse after award day additions
+                    merged.sort((a, b) => a.start - b.start);
+                    for (let j = merged.length - 1; j > 0; j--) {
+                        const prev = merged[j - 1];
+                        if (merged[j].start <= new Date(prev.end.getTime() + 86400000)) {
+                            if (merged[j].end > prev.end) prev.end = new Date(merged[j].end);
+                            merged.splice(j, 1);
+                        }
                     }
                 }
 
@@ -3309,12 +3567,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 let cur = new Date(trip.start);
                 for (const ex of merged) {
                     if (cur < ex.start) {
-                        const segEnd = new Date(ex.start);
-                        segEnd.setDate(segEnd.getDate() - 1);
+                        const segEnd = new Date(ex.start.getTime() - 86400000);
                         if (cur <= segEnd) modifiedTrips.push({ start: new Date(cur), end: segEnd });
                     }
-                    const nextDay = new Date(ex.end);
-                    nextDay.setDate(nextDay.getDate() + 1);
+                    const nextDay = new Date(ex.end.getTime() + 86400000);
                     if (nextDay > cur) cur = nextDay;
                 }
                 if (cur <= trip.end) modifiedTrips.push({ start: new Date(cur), end: new Date(trip.end) });
@@ -3323,37 +3579,65 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return modifiedTrips;
         }
 
-        // Build the HTML for the Optimizer column cell
+        // Build the HTML for the Conflict Mode column cell
         function formatOptimizerCell(result) {
-            const { trainMode, vacMode, trainScore, vacScore } = result;
+            const { trainMode, vacMode, trainScore, vacScore, lineType } = result;
             if (!trainMode && !vacMode) return '<span style="color:var(--gray-600)">—</span>';
 
-            const lines = [];
+            const is60Day = lineType && lineType.includes('60-day');
+            const showPeriods = is60Day && (
+                (trainScore && (trainScore.trainScoreBP1 || trainScore.trainScoreBP2)) ||
+                (vacScore && vacScore.vacContribBP2 !== undefined)
+            );
 
-            if (trainMode && trainScore) {
-                if (trainScore.isNone) {
-                    lines.push('<span class="opt-line opt-good">Train: on off days ✓</span>');
-                } else if (trainScore.isPartial) {
-                    lines.push(`<span class="opt-line opt-partial">Train: ${trainScore.overlapDays}/${trainScore.totalTrainingDays} days ⚠ partial</span>`);
-                } else {
-                    lines.push(`<span class="opt-line opt-award">Train: ${trainScore.overlapDays}/${trainScore.totalTrainingDays} days</span>`);
+            function trainLine(ts) {
+                if (!ts) return null;
+                if (ts.isNone)    return '<span class="opt-line opt-good">Train: ✓ off days</span>';
+                if (ts.isPartial) return `<span class="opt-line opt-partial">Train: ${ts.overlapDays}/${ts.totalTrainingDays}d ⚠</span>`;
+                return `<span class="opt-line opt-award">Train: ${ts.overlapDays}/${ts.totalTrainingDays}d</span>`;
+            }
+            function bufferLine(ts) {
+                return ts && ts.bufferDays > 0
+                    ? `<span class="opt-line opt-buffer">Buffer: ${ts.bufferDays} (practical)</span>`
+                    : null;
+            }
+            function vacLine(contrib) {
+                if (!contrib) return vacMode ? '<span class="opt-line opt-good">No conflict</span>' : null;
+                if (contrib.awardDays > 0)  return `<span class="opt-line opt-award">AWRD: ${contrib.awardDays}d</span>`;
+                if (contrib.vacWorkdays > 0) return `<span class="opt-line">Vac: ${contrib.vacWorkdays}d</span>`;
+                return '<span class="opt-line opt-good">No conflict</span>';
+            }
+
+            const lines = [];
+            const push = (x) => { if (x) lines.push(x); };
+
+            if (showPeriods) {
+                lines.push('<span class="opt-period-label">BP1</span>');
+                if (trainMode) push(trainLine(trainScore?.trainScoreBP1));
+                if (trainMode) push(bufferLine(trainScore?.trainScoreBP1));
+                if (vacMode)   push(vacLine(vacScore?.vacContribBP1));
+
+                lines.push('<span class="opt-period-label">BP2</span>');
+                if (trainMode) push(trainLine(trainScore?.trainScoreBP2));
+                if (trainMode) push(bufferLine(trainScore?.trainScoreBP2));
+                if (vacMode)   push(vacLine(vacScore?.vacContribBP2));
+            } else {
+                if (trainMode && trainScore) {
+                    push(trainLine(trainScore));
+                    push(bufferLine(trainScore));
                 }
-                if (trainScore.bufferDays > 0) {
-                    lines.push(`<span class="opt-line opt-buffer">Buffer: ${trainScore.bufferDays} (practical)</span>`);
+                if (vacMode && vacScore) {
+                    push(vacLine({ awardDays: vacScore.awardDays || 0, vacWorkdays: vacScore.vacWorkdays || 0 }));
                 }
             }
 
-            if (vacMode && vacScore) {
-                if (vacScore.awardDays > 0) {
-                    lines.push(`<span class="opt-line opt-award">AWRD: ${vacScore.awardDays} day${vacScore.awardDays > 1 ? 's' : ''}</span>`);
-                } else if (vacScore.vacWorkdays > 0) {
-                    lines.push(`<span class="opt-line">Vac conflict: ${vacScore.vacWorkdays}d</span>`);
-                } else {
-                    lines.push('<span class="opt-line opt-good">No conflict</span>');
-                }
-                if (vacScore.recommendedSlideStart) {
-                    lines.push(`<span class="opt-line opt-slide">Slide: ${fmtDate(vacScore.recommendedSlideStart)}–${fmtDate(vacScore.recommendedSlideEnd)}</span>`);
-                }
+            // Slide display for each vacation range
+            if (vacMode && vacScore && vacScore.rangeScores) {
+                vacScore.rangeScores.forEach(rs => {
+                    if (rs && rs.recommendedSlideStart) {
+                        push(`<span class="opt-line opt-slide">Slide: ${fmtDate(rs.recommendedSlideStart)}–${fmtDate(rs.recommendedSlideEnd)}</span>`);
+                    }
+                });
             }
 
             return `<div class="optimizer-col">${lines.join('')}</div>`;
@@ -3381,9 +3665,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             if (thFrontDH)   thFrontDH.classList.toggle('dimmed', optMode);
             if (thBackDH)    thBackDH.classList.toggle('dimmed', optMode);
             if (effvalLabel) {
-                if (anyVac) effvalLabel.textContent = 'Eff. Days Off';
-                else if (anyTrain) effvalLabel.textContent = 'Train Score';
-                else effvalLabel.textContent = 'Eff. Value';
+                effvalLabel.textContent = optMode ? 'Conflict Score' : 'Eff. Value';
             }
             if (thOptimizer) thOptimizer.style.color = optMode ? 'var(--gold)' : '';
 
@@ -3392,7 +3674,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             document.getElementById('totalExcluded').textContent = excluded;
             const topVal = results.length > 0 ? results[0].effectiveValue : 0;
             document.getElementById('topValue').textContent = optMode
-                ? (Number.isInteger(topVal) ? topVal : topVal.toFixed(0))
+                ? topVal.toFixed(1)
                 : topVal.toFixed(2);
 
             // Populate table
@@ -3415,7 +3697,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 const backDHCell    = optMode ? dimCell('dh-col')        : `<td class="value-highlight dh-col">${result.backDH  || 0}</td>`;
 
                 const effValDisplay = optMode
-                    ? (Number.isInteger(result.effectiveValue) ? result.effectiveValue : result.effectiveValue.toFixed(0))
+                    ? result.effectiveValue.toFixed(1)
                     : result.effectiveValue.toFixed(2);
 
                 const displayTrips = (optMode && result.modifiedTrips) ? result.modifiedTrips : result.trips;
