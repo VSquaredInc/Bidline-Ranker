@@ -799,7 +799,11 @@
         }
 
         th.guarantee-col.dimmed,
-        td.guarantee-col.dimmed {
+        td.guarantee-col.dimmed,
+        th.daysoff-col.dimmed,
+        td.daysoff-col.dimmed,
+        th.dh-col.dimmed,
+        td.dh-col.dimmed {
             opacity: 0.35;
         }
 
@@ -1347,9 +1351,9 @@
 
             <div class="optimizer-section" style="margin-top: 24px;">
                 <div class="label-row" style="margin-bottom:12px;">
-                    <label class="section-label" style="margin-bottom:0;">Optimizer Modes</label>
+                    <label class="section-label" style="margin-bottom:0;">Conflict Mode</label>
                     <button class="tooltip-icon" onclick="toggleTooltip('tt-optimizer')" aria-label="Help">i</button>
-                    <span class="tooltip-bubble" id="tt-optimizer">Optional — activate when you have training or vacation in the bid month. When active, bidline guarantee goes to zero and lines are ranked by effective days off instead.</span>
+                    <span class="tooltip-bubble" id="tt-optimizer">Optional — activate when you want to conflict training or vacation in your bid. When active, bidline guarantee goes to zero and lines are ranked by effective days off.</span>
                 </div>
 
                 <div class="optimizer-toggle-row">
@@ -1463,20 +1467,20 @@
                                 <th class="sortable" data-sort="line">Line #</th>
                                 <th>Type</th>
                                 <th id="th-guarantee" class="sortable guarantee-col" data-sort="guarantee">Avg Guarantee (hrs)</th>
-                                <th id="th-daysoff" class="sortable" data-sort="daysOff">Avg Days Off</th>
+                                <th id="th-daysoff" class="sortable daysoff-col" data-sort="daysOff">Avg Days Off</th>
                                 <th id="th-effval" class="sortable" data-sort="effectiveValue">
                                     <div class="label-row"><span id="effval-label">Eff. Value</span>
                                         <button class="tooltip-icon" onclick="toggleTooltip('tt-effval'); event.stopPropagation();" aria-label="Help">i</button>
                                         <span class="tooltip-bubble" id="tt-effval">Composite ranking score.<br><strong>Avg Guarantee + ((Avg Days Off − Group Avg) × Day Off Value)</strong><br>Airport preferences apply a bonus or penalty on top.<br>In Optimizer mode: shows effective days off or training overlap score.</span>
                                     </div>
                                 </th>
-                                <th class="sortable" data-sort="frontDH">
+                                <th id="th-frontDH" class="sortable dh-col" data-sort="frontDH">
                                     <div class="label-row">Front DH
                                         <button class="tooltip-icon" onclick="toggleTooltip('tt-frontdh'); event.stopPropagation();" aria-label="Help">i</button>
                                         <span class="tooltip-bubble" id="tt-frontdh">Number of trips where you deadhead commercially <strong>from base</strong> to start the pairing (e.g., ORD → ANC on a commercial flight before the trip begins).</span>
                                     </div>
                                 </th>
-                                <th class="sortable" data-sort="backDH">
+                                <th id="th-backDH" class="sortable dh-col" data-sort="backDH">
                                     <div class="label-row">Back DH
                                         <button class="tooltip-icon" onclick="toggleTooltip('tt-backdh'); event.stopPropagation();" aria-label="Help">i</button>
                                         <span class="tooltip-bubble" id="tt-backdh">Number of trips where you deadhead commercially <strong>to base</strong> to end the pairing (e.g., ANC → ORD on a commercial flight after the trip ends).</span>
@@ -3136,6 +3140,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         optimizerEffValue = (trainScore.overlapDays * 100) + trainScore.bufferDays;
                     }
 
+                    const rawTrips = bidlineInfo ? (bidlineInfo.trips || []) : [];
+                    const modifiedTrips = (vacMode || trainMode)
+                        ? computeModifiedTrips(rawTrips, vacScore, vacStart, vacEnd, trainStart, trainEnd)
+                        : null;
+
                     results.push({
                         lineNum,
                         lineType: creditInfo.lineType,
@@ -3145,7 +3154,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         airports: lineAirports,
                         frontDH: bidlineInfo ? (bidlineInfo.frontDH || 0) : 0,
                         backDH:  bidlineInfo ? (bidlineInfo.backDH  || 0) : 0,
-                        trips:   bidlineInfo ? (bidlineInfo.trips   || []) : [],
+                        trips:   rawTrips,
+                        modifiedTrips,
                         trainScore,
                         vacScore,
                         vacMode,
@@ -3230,6 +3240,89 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return `${mon[d.getMonth()]} ${d.getDate()}`;
         }
 
+        // Compute modified trip segments after removing vacation window, award days, and training window.
+        // Returns an array of {start, end} Date pairs representing actual flying segments.
+        function computeModifiedTrips(originalTrips, vacScore, vacStart, vacEnd, trainStart, trainEnd) {
+            const actualVacStart = vacScore && vacScore.recommendedSlideStart ? vacScore.recommendedSlideStart : (vacStart || null);
+            const actualVacEnd   = vacScore && vacScore.recommendedSlideEnd   ? vacScore.recommendedSlideEnd   : (vacEnd   || null);
+
+            const modifiedTrips = [];
+
+            for (const trip of originalTrips) {
+                const excl = []; // date ranges to exclude from this trip
+
+                // Vacation window
+                if (actualVacStart && actualVacEnd && actualVacStart <= trip.end && actualVacEnd >= trip.start) {
+                    const exS = actualVacStart > trip.start ? actualVacStart : trip.start;
+                    const exE = actualVacEnd   < trip.end   ? actualVacEnd   : trip.end;
+                    excl.push({ start: new Date(exS), end: new Date(exE) });
+
+                    // Award days: re-derive which end they fall on, then exclude those days too
+                    if (vacScore && vacScore.awardDays > 0) {
+                        const daysBefore = actualVacStart > trip.start
+                            ? Math.round((actualVacStart - trip.start) / 86400000) : 0;
+                        const daysAfter  = actualVacEnd   < trip.end
+                            ? Math.round((trip.end - actualVacEnd) / 86400000) : 0;
+                        const awardA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
+                        const awardB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
+
+                        if (awardB >= awardA && awardB > 0) {
+                            // Award days at end of trip
+                            const awdStart = new Date(trip.end);
+                            awdStart.setDate(awdStart.getDate() - (awardB - 1));
+                            excl.push({ start: awdStart, end: new Date(trip.end) });
+                        } else if (awardA > 0) {
+                            // Award days at start of trip
+                            const awdEnd = new Date(trip.start);
+                            awdEnd.setDate(awdEnd.getDate() + (awardA - 1));
+                            excl.push({ start: new Date(trip.start), end: awdEnd });
+                        }
+                    }
+                }
+
+                // Training window
+                if (trainStart && trainEnd && trainStart <= trip.end && trainEnd >= trip.start) {
+                    const exS = trainStart > trip.start ? trainStart : trip.start;
+                    const exE = trainEnd   < trip.end   ? trainEnd   : trip.end;
+                    excl.push({ start: new Date(exS), end: new Date(exE) });
+                }
+
+                if (excl.length === 0) {
+                    modifiedTrips.push({ start: new Date(trip.start), end: new Date(trip.end) });
+                    continue;
+                }
+
+                // Sort and merge overlapping exclusion ranges
+                excl.sort((a, b) => a.start - b.start);
+                const merged = [{ start: new Date(excl[0].start), end: new Date(excl[0].end) }];
+                for (let i = 1; i < excl.length; i++) {
+                    const last = merged[merged.length - 1];
+                    const nextAfterLast = new Date(last.end); nextAfterLast.setDate(nextAfterLast.getDate() + 1);
+                    if (excl[i].start <= nextAfterLast) {
+                        if (excl[i].end > last.end) last.end = new Date(excl[i].end);
+                    } else {
+                        merged.push({ start: new Date(excl[i].start), end: new Date(excl[i].end) });
+                    }
+                }
+
+                // Derive remaining flying segments between excluded blocks
+                let cur = new Date(trip.start);
+                for (const ex of merged) {
+                    if (cur < ex.start) {
+                        const segEnd = new Date(ex.start);
+                        segEnd.setDate(segEnd.getDate() - 1);
+                        if (cur <= segEnd) modifiedTrips.push({ start: new Date(cur), end: segEnd });
+                    }
+                    const nextDay = new Date(ex.end);
+                    nextDay.setDate(nextDay.getDate() + 1);
+                    if (nextDay > cur) cur = nextDay;
+                }
+                if (cur <= trip.end) modifiedTrips.push({ start: new Date(cur), end: new Date(trip.end) });
+            }
+
+            return modifiedTrips;
+        }
+
         // Build the HTML for the Optimizer column cell
         function formatOptimizerCell(result) {
             const { trainMode, vacMode, trainScore, vacScore } = result;
@@ -3261,7 +3354,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 if (vacScore.recommendedSlideStart) {
                     lines.push(`<span class="opt-line opt-slide">Slide: ${fmtDate(vacScore.recommendedSlideStart)}–${fmtDate(vacScore.recommendedSlideEnd)}</span>`);
                 }
-                lines.push(`<span class="opt-line" style="color:var(--gray-400)">Eff off: ${vacScore.effectiveDaysOff}</span>`);
             }
 
             return `<div class="optimizer-col">${lines.join('')}</div>`;
@@ -3279,9 +3371,15 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
             // Update column headers and dimming for optimizer mode
             const thGuarantee = document.getElementById('th-guarantee');
+            const thDaysOff   = document.getElementById('th-daysoff');
+            const thFrontDH   = document.getElementById('th-frontDH');
+            const thBackDH    = document.getElementById('th-backDH');
             const effvalLabel  = document.getElementById('effval-label');
             const thOptimizer  = document.getElementById('th-optimizer');
             if (thGuarantee) thGuarantee.classList.toggle('dimmed', optMode);
+            if (thDaysOff)   thDaysOff.classList.toggle('dimmed', optMode);
+            if (thFrontDH)   thFrontDH.classList.toggle('dimmed', optMode);
+            if (thBackDH)    thBackDH.classList.toggle('dimmed', optMode);
             if (effvalLabel) {
                 if (anyVac) effvalLabel.textContent = 'Eff. Days Off';
                 else if (anyTrain) effvalLabel.textContent = 'Train Score';
@@ -3308,24 +3406,30 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 if (result.rank <= 3) rankClass = 'top-3';
                 else if (result.rank <= 10) rankClass = 'top-10';
 
-                const guaranteeCell = optMode
-                    ? `<td class="value-highlight guarantee-col dimmed" style="color:var(--gray-500)">—</td>`
-                    : `<td class="value-highlight guarantee-col">${result.guarantee.toFixed(2)}</td>`;
+                const dimCell = (cls) =>
+                    `<td class="value-highlight ${cls} dimmed" style="color:var(--gray-500)">—</td>`;
+
+                const guaranteeCell = optMode ? dimCell('guarantee-col') : `<td class="value-highlight guarantee-col">${result.guarantee.toFixed(2)}</td>`;
+                const daysOffCell   = optMode ? dimCell('daysoff-col')   : `<td class="value-highlight daysoff-col">${result.daysOff}</td>`;
+                const frontDHCell   = optMode ? dimCell('dh-col')        : `<td class="value-highlight dh-col">${result.frontDH || 0}</td>`;
+                const backDHCell    = optMode ? dimCell('dh-col')        : `<td class="value-highlight dh-col">${result.backDH  || 0}</td>`;
 
                 const effValDisplay = optMode
                     ? (Number.isInteger(result.effectiveValue) ? result.effectiveValue : result.effectiveValue.toFixed(0))
                     : result.effectiveValue.toFixed(2);
+
+                const displayTrips = (optMode && result.modifiedTrips) ? result.modifiedTrips : result.trips;
 
                 tr.innerHTML = `
                     <td><span class="rank-badge ${rankClass}">${result.rank}</span></td>
                     <td class="value-highlight">${result.lineNum}</td>
                     <td><span class="line-type">${result.lineType}</span></td>
                     ${guaranteeCell}
-                    <td class="value-highlight">${result.daysOff}</td>
+                    ${daysOffCell}
                     <td class="value-highlight" style="color: var(--gold);">${effValDisplay}</td>
-                    <td class="value-highlight">${result.frontDH || 0}</td>
-                    <td class="value-highlight">${result.backDH || 0}</td>
-                    <td class="trips-cell">${formatTripDates(result.trips)}</td>
+                    ${frontDHCell}
+                    ${backDHCell}
+                    <td class="trips-cell">${formatTripDates(displayTrips)}</td>
                     <td>${formatOptimizerCell(result)}</td>
                     <td class="airports-cell">${formatAirports(result.airports)}</td>
                 `;
