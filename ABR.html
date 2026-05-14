@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.0';
+        const APP_VERSION   = '1.5.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2565,45 +2565,40 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const hasDateCols  = /\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{1,2}\b/.test(text);
             const hasSchedHdr  = /\b7[0-9A-Z]{2}\s+(?:FO|CA)\b/.test(text);
             const hasCreditRows = /^\s*\d{4}\s+(Primary|Secondary|Reserve)/m.test(text);
+            // New credit format (2026+): credit values precede line ID; line number follows AC type
+            const hasCreditRowsNewFmt = /\b747\s+\d{4}\s+[\d.]+(?:Primary|Secondary|Reserve)/m.test(text);
             if (hasDateCols && hasSchedHdr) return 'bidline';
-            if (hasCreditRows) return 'credit';
+            if (hasCreditRows || hasCreditRowsNewFmt) return 'credit';
             return 'unknown';
         }
 
         // Extract the period string (e.g. "Apr26-May26") from a credit file's text
         function extractCreditPeriod(text) {
+            // Old format: "Apr26-May26" style period string in PDF title
             const m = text.match(/\b(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{2}-(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\d{2}\b/);
-            return m ? m[0] : null;
+            if (m) return m[0];
+            // New format (2026+): "June BID MONTH" / "JULY BID MONTH" header
+            const m2 = text.match(/\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+BID\s+MONTH\b/i);
+            if (m2) return m2[1].charAt(0).toUpperCase() + m2[1].slice(1).toLowerCase() + ' BID';
+            return null;
         }
 
         // Parse credit value document
         function parseCreditValue(text) {
             const lines = {};
-            
-            // Match lines with ORD and FO
-            const linePattern = /(\d{4})\s+(Primary|Secondary|Reserve)[\s\S]*?747\s+ORD\s+FO\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+(\d+)/g;
-            
-            // Simpler approach: split by lines and parse each
             const textLines = text.split(/\n/);
-            
+
             for (const line of textLines) {
-                // Look for credit rows: 4-digit line number + crew position (FO or CA)
-                const lineNumMatch = line.match(/^\s*(\d{4})/);
-                if (!lineNumMatch) continue;
                 if (!/\b(?:FO|CA)\b/.test(line)) continue;
-                {
-                    // Extract numbers from the line
-                    const parts = line.trim().split(/\s+/);
 
-                    const lineNum = lineNumMatch[1];
-
-                    // Find line type
+                const oldFmtMatch = line.match(/^\s*(\d{4})/);
+                if (oldFmtMatch) {
+                    // Old format: LINENUM LINETYPE ... [credit cols] GUARANTEE TAFB DAYSOFF
+                    const lineNum = oldFmtMatch[1];
                     let lineType = 'Unknown';
-                    // Check longest/most-specific strings first; handle both full words
-                    // (Int, AdH) and PDF-truncated forms (In, Ad)
                     if (line.includes('Primary 60-day Int') || line.includes('Primary 60-day In ') || line.includes('Primary 60-day In\t')) lineType = 'Primary 60-day Int';
                     else if (line.includes('Primary 60-day AdH') || line.includes('Primary 60-day Ad ') || line.includes('Primary 60-day Ad\t')) lineType = 'Primary 60-day AdH';
-                    else if (/Primary 60-day\s*$/.test(line.trimEnd())) lineType = 'Primary 60-day Int'; // fallback if suffix dropped entirely
+                    else if (/Primary 60-day\s*$/.test(line.trimEnd())) lineType = 'Primary 60-day Int';
                     else if (line.includes('Primary Int') || line.includes('Primary In ') || line.includes('Primary In\t')) lineType = 'Primary Int';
                     else if (line.includes('Primary AdH') || line.includes('Primary Ad ') || line.includes('Primary Ad\t')) lineType = 'Primary AdH';
                     else if (line.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
@@ -2611,35 +2606,40 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     else if (line.includes('Reserve 60-day AdH') || line.includes('Reserve 60-day Ad ') || line.includes('Reserve 60-day Ad\t')) lineType = 'Reserve 60-day AdH';
                     else if (line.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
                     else if (line.includes('Reserve AdH') || line.includes('Reserve Ad ') || line.includes('Reserve Ad\t')) lineType = 'Reserve AdH';
-
-                    // Extract all numbers from the line
                     const numbers = line.match(/\d+\.?\d*/g);
                     if (!numbers || numbers.length < 12) continue;
-                    
-                    // The guarantee (SUM GREATER CREDIT OR RIG W ART33 AND ULR) is typically the second-to-last number before TAFB
-                    // Format: LINE, numbers..., Guarantee, TAFB, Days Off
-                    // Looking at the data: the guarantee column is at a specific position
-                    
-                    // Find position of key values
-                    // Days Off is the last number
-                    const daysOff = parseInt(numbers[numbers.length - 1]);
-                    
-                    // TAFB is second to last
-                    const tafb = parseFloat(numbers[numbers.length - 2]);
-                    
-                    // Guarantee (SUM GREATER CREDIT OR RIG W ART33 AND ULR) is third to last
+                    const daysOff   = parseInt(numbers[numbers.length - 1]);
+                    const tafb      = parseFloat(numbers[numbers.length - 2]);
                     const guarantee = parseFloat(numbers[numbers.length - 3]);
-                    
-                    lines[lineNum] = {
-                        lineNum,
-                        lineType,
-                        guarantee,
-                        tafb,
-                        daysOff
-                    };
+                    lines[lineNum] = { lineNum, lineType, guarantee, tafb, daysOff };
+                } else {
+                    // New format (2026+): [10 credit values] POS BASE 747 LINENUM TAFB+LINETYPE DAYSOFF
+                    // e.g. "64.00 0.00 ... 55.34 FO ORD 747 4111 313.09Primary Int 15"
+                    const newFmtMatch = line.match(/\b747\s+(\d{4})\s+([\d.]+)(Primary|Secondary|Reserve)(.+?)\s+(\d{1,2})\s*$/);
+                    if (!newFmtMatch) continue;
+                    const lineNum     = newFmtMatch[1];
+                    const tafb        = parseFloat(newFmtMatch[2]);
+                    const lineTypeRaw = newFmtMatch[3] + newFmtMatch[4];
+                    const daysOff     = parseInt(newFmtMatch[5]);
+                    let lineType = 'Unknown';
+                    if (lineTypeRaw.includes('Primary 60-day Int') || lineTypeRaw.includes('Primary 60-day In')) lineType = 'Primary 60-day Int';
+                    else if (lineTypeRaw.includes('Primary 60-day AdH') || lineTypeRaw.includes('Primary 60-day Ad')) lineType = 'Primary 60-day AdH';
+                    else if (/^Primary 60-day\s*$/.test(lineTypeRaw.trim())) lineType = 'Primary 60-day Int';
+                    else if (lineTypeRaw.includes('Primary Int') || lineTypeRaw.includes('Primary In')) lineType = 'Primary Int';
+                    else if (lineTypeRaw.includes('Primary AdH') || lineTypeRaw.includes('Primary Ad')) lineType = 'Primary AdH';
+                    else if (lineTypeRaw.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
+                    else if (lineTypeRaw.includes('Secondary AdH') || lineTypeRaw.includes('Secondary Ad')) lineType = 'Secondary AdH';
+                    else if (lineTypeRaw.includes('Reserve 60-day AdH') || lineTypeRaw.includes('Reserve 60-day Ad')) lineType = 'Reserve 60-day AdH';
+                    else if (lineTypeRaw.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
+                    else if (lineTypeRaw.includes('Reserve AdH') || lineTypeRaw.includes('Reserve Ad')) lineType = 'Reserve AdH';
+                    // Guarantee is the 10th credit column (index 9), just before the line identifier
+                    const numbers = line.match(/\d+\.?\d*/g);
+                    if (!numbers || numbers.length < 10) continue;
+                    const guarantee = parseFloat(numbers[9]);
+                    lines[lineNum] = { lineNum, lineType, guarantee, tafb, daysOff };
                 }
             }
-            
+
             console.log(`parseCreditValue: Found ${Object.keys(lines).length} lines`);
             return lines;
         }
