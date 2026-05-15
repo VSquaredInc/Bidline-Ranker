@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.5';
+        const APP_VERSION   = '1.5.6';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2907,7 +2907,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const isPartial = offDaysInTraining > 0 && overlapDays > 0;
             const isNone = overlapDays === 0;
 
-            return { overlapDays, bufferDays, isPartial, isNone, totalTrainingDays };
+            return { overlapDays, offDaysInTraining, bufferDays, isPartial, isNone, totalTrainingDays };
         }
 
         // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays, effectiveDaysOff
@@ -3414,13 +3414,13 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                         const bp1VacConflicted = vacScore && ((vacScore.vacContribBP1?.vacWorkdays > 0) || (vacScore.vacContribBP1?.awardDays > 0));
                         const bp2VacConflicted = vacScore && ((vacScore.vacContribBP2?.vacWorkdays > 0) || (vacScore.vacContribBP2?.awardDays > 0));
-                        const bp1TrainConflicted = trainScore && trainScore.trainScoreBP1 && !trainScore.trainScoreBP1.isNone;
-                        const bp2TrainConflicted = trainScore && trainScore.trainScoreBP2 && !trainScore.trainScoreBP2.isNone;
+                        const bp1TrainConflicted = !!(trainScore && trainScore.trainScoreBP1);
+                        const bp2TrainConflicted = !!(trainScore && trainScore.trainScoreBP2);
                         bp1Conflicted = bp1VacConflicted || bp1TrainConflicted;
                         bp2Conflicted = is60Day && (bp2VacConflicted || bp2TrainConflicted);
 
-                        effDaysOffBP1 = (vacScore?.effDaysOffBP1 ?? (nativeDaysOffBP1 || 0)) + (trainScore?.trainScoreBP1?.overlapDays ?? 0);
-                        effDaysOffBP2 = (vacScore?.effDaysOffBP2 ?? (nativeDaysOffBP2 || 0)) + (trainScore?.trainScoreBP2?.overlapDays ?? 0);
+                        effDaysOffBP1 = (vacScore?.effDaysOffBP1 ?? (nativeDaysOffBP1 || 0)) + (trainScore?.trainScoreBP1?.overlapDays ?? 0) - (trainScore?.trainScoreBP1?.offDaysInTraining ?? 0);
+                        effDaysOffBP2 = (vacScore?.effDaysOffBP2 ?? (nativeDaysOffBP2 || 0)) + (trainScore?.trainScoreBP2?.overlapDays ?? 0) - (trainScore?.trainScoreBP2?.offDaysInTraining ?? 0);
 
                         const bp1G  = creditInfo.bp1Guarantee  ?? creditInfo.guarantee;
                         const bp2G  = creditInfo.bp2Guarantee  ?? creditInfo.guarantee;
@@ -3651,9 +3651,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
             function trainLine(ts) {
                 if (!ts) return null;
-                if (ts.isNone)    return '<span class="opt-line opt-good">Train: ✓ off days</span>';
-                if (ts.isPartial) return `<span class="opt-line opt-partial">Train: ${ts.overlapDays}/${ts.totalTrainingDays}d ⚠</span>`;
-                return `<span class="opt-line opt-award">Train: ${ts.overlapDays}/${ts.totalTrainingDays}d</span>`;
+                if (ts.isNone)    return `<span class="opt-line" style="color:#ef4444">Train: ✗ ${ts.offDaysInTraining}d off days</span>`;
+                if (ts.isPartial) return `<span class="opt-line opt-partial">Train: ${ts.overlapDays}/${ts.totalTrainingDays}d on ⚠</span>`;
+                return `<span class="opt-line opt-good">Train: ✓ ${ts.overlapDays}d on days</span>`;
             }
             function bufferLine(ts) {
                 return ts && ts.bufferDays > 0
