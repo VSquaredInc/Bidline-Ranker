@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.2';
+        const APP_VERSION   = '1.5.3';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2591,55 +2591,109 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const lines = {};
             const textLines = text.split(/\n/);
 
-            for (const line of textLines) {
-                if (!/\b(?:FO|CA)\b/.test(line)) continue;
+            if (text.includes('SUM OF CREDITS')) {
+                // 2026+ column-per-line format.
+                // Each block: credit rows (top) → POS/BASE/AC/LINE TYPE rows → line numbers row (bottom).
+                // We scan for the line-numbers row then look backward for credit rows.
+                for (let i = 0; i < textLines.length; i++) {
+                    const line = textLines[i].trim();
+                    // Line-numbers row: 2+ space-separated 4-digit numbers
+                    if (!/^(?:\d{4}\s+)+\d{4}\s*$/.test(line)) continue;
 
-                const oldFmtMatch = line.match(/^\s*(\d{4})/);
-                if (oldFmtMatch) {
-                    // Old format: LINENUM LINETYPE ... [credit cols] GUARANTEE TAFB DAYSOFF
-                    const lineNum = oldFmtMatch[1];
-                    let lineType = 'Unknown';
-                    if (line.includes('Primary 60-day Int') || line.includes('Primary 60-day In ') || line.includes('Primary 60-day In\t')) lineType = 'Primary 60-day Int';
-                    else if (line.includes('Primary 60-day AdH') || line.includes('Primary 60-day Ad ') || line.includes('Primary 60-day Ad\t')) lineType = 'Primary 60-day AdH';
-                    else if (/Primary 60-day\s*$/.test(line.trimEnd())) lineType = 'Primary 60-day Int';
-                    else if (line.includes('Primary Int') || line.includes('Primary In ') || line.includes('Primary In\t')) lineType = 'Primary Int';
-                    else if (line.includes('Primary AdH') || line.includes('Primary Ad ') || line.includes('Primary Ad\t')) lineType = 'Primary AdH';
-                    else if (line.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
-                    else if (line.includes('Secondary AdH') || line.includes('Secondary Ad ') || line.includes('Secondary Ad\t')) lineType = 'Secondary AdH';
-                    else if (line.includes('Reserve 60-day AdH') || line.includes('Reserve 60-day Ad ') || line.includes('Reserve 60-day Ad\t')) lineType = 'Reserve 60-day AdH';
-                    else if (line.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
-                    else if (line.includes('Reserve AdH') || line.includes('Reserve Ad ') || line.includes('Reserve Ad\t')) lineType = 'Reserve AdH';
-                    const numbers = line.match(/\d+\.?\d*/g);
-                    if (!numbers || numbers.length < 12) continue;
-                    const daysOff   = parseInt(numbers[numbers.length - 1]);
-                    const tafb      = parseFloat(numbers[numbers.length - 2]);
-                    const guarantee = parseFloat(numbers[numbers.length - 3]);
-                    lines[lineNum] = { lineNum, lineType, guarantee, tafb, daysOff };
-                } else {
-                    // New format (2026+): [10 credit values] POS BASE 747 LINENUM TAFB+LINETYPE DAYSOFF
-                    // e.g. "64.00 0.00 ... 55.34 FO ORD 747 4111 313.09Primary Int 15"
-                    const newFmtMatch = line.match(/\b747\s+(\d{4})\s+([\d.]+)(Primary|Secondary|Reserve)(.+?)\s+(\d{1,2})\s*$/);
-                    if (!newFmtMatch) continue;
-                    const lineNum     = newFmtMatch[1];
-                    const tafb        = parseFloat(newFmtMatch[2]);
-                    const lineTypeRaw = newFmtMatch[3] + newFmtMatch[4];
-                    const daysOff     = parseInt(newFmtMatch[5]);
-                    let lineType = 'Unknown';
-                    if (lineTypeRaw.includes('Primary 60-day Int') || lineTypeRaw.includes('Primary 60-day In')) lineType = 'Primary 60-day Int';
-                    else if (lineTypeRaw.includes('Primary 60-day AdH') || lineTypeRaw.includes('Primary 60-day Ad')) lineType = 'Primary 60-day AdH';
-                    else if (/^Primary 60-day\s*$/.test(lineTypeRaw.trim())) lineType = 'Primary 60-day Int';
-                    else if (lineTypeRaw.includes('Primary Int') || lineTypeRaw.includes('Primary In')) lineType = 'Primary Int';
-                    else if (lineTypeRaw.includes('Primary AdH') || lineTypeRaw.includes('Primary Ad')) lineType = 'Primary AdH';
-                    else if (lineTypeRaw.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
-                    else if (lineTypeRaw.includes('Secondary AdH') || lineTypeRaw.includes('Secondary Ad')) lineType = 'Secondary AdH';
-                    else if (lineTypeRaw.includes('Reserve 60-day AdH') || lineTypeRaw.includes('Reserve 60-day Ad')) lineType = 'Reserve 60-day AdH';
-                    else if (lineTypeRaw.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
-                    else if (lineTypeRaw.includes('Reserve AdH') || lineTypeRaw.includes('Reserve Ad')) lineType = 'Reserve AdH';
-                    // Guarantee is the 10th credit column (index 9), just before the line identifier
-                    const numbers = line.match(/\d+\.?\d*/g);
-                    if (!numbers || numbers.length < 10) continue;
-                    const guarantee = parseFloat(numbers[9]);
-                    lines[lineNum] = { lineNum, lineType, guarantee, tafb, daysOff };
+                    const lineNums = line.split(/\s+/);
+                    const count = lineNums.length;
+                    let daysOffArr = null, tafbArr = null, guaranteeArr = null, lineTypeStr = null;
+
+                    for (let j = i - 1; j >= Math.max(0, i - 80); j--) {
+                        const prevTrim = textLines[j].trim();
+
+                        if (!daysOffArr && prevTrim.startsWith('Off ')) {
+                            const nums = prevTrim.match(/\d+(?:\.\d+)?/g);
+                            if (nums && nums.length >= count) daysOffArr = nums.slice(0, count).map(Number);
+                        }
+
+                        if (!tafbArr && prevTrim === 'TAFB') {
+                            const tafbNums = [];
+                            for (let k = j + 1; k < i; k++) {
+                                if (textLines[k].trim() === 'SUM') break;
+                                const nums = textLines[k].match(/\d+(?:\.\d+)?/g);
+                                if (nums) tafbNums.push(...nums.map(Number));
+                            }
+                            if (tafbNums.length >= count) tafbArr = tafbNums.slice(0, count);
+                        }
+
+                        if (!guaranteeArr && /^CREDIT ART33\s/.test(prevTrim)) {
+                            const nums = prevTrim.replace(/^CREDIT ART33\s+/, '').match(/\d+(?:\.\d+)?/g);
+                            if (nums && nums.length >= count) guaranteeArr = nums.slice(0, count).map(Number);
+                        }
+
+                        if (!lineTypeStr && prevTrim === 'LINE TYPE') {
+                            for (let k = j + 1; k < i; k++) {
+                                if (textLines[k].trim()) { lineTypeStr = textLines[k].trim(); break; }
+                            }
+                        }
+                    }
+
+                    const typeRegex = /(?:Primary|Secondary|Reserve)(?:\s+60-day)?(?:\s+(?:Int|AdH))?/g;
+                    const lineTypeArr = lineTypeStr ? (lineTypeStr.match(typeRegex) || []) : [];
+
+                    lineNums.forEach((lineNum, idx) => {
+                        lines[lineNum] = {
+                            lineNum,
+                            lineType: (lineTypeArr[idx] || 'Unknown').trim(),
+                            guarantee: guaranteeArr ? guaranteeArr[idx] : 0,
+                            tafb:      tafbArr      ? tafbArr[idx]      : 0,
+                            daysOff:   daysOffArr   ? daysOffArr[idx]   : 0
+                        };
+                    });
+                }
+            } else {
+                // Legacy row-per-line formats (pre-2026)
+                for (const line of textLines) {
+                    if (!/\b(?:FO|CA)\b/.test(line)) continue;
+
+                    const oldFmtMatch = line.match(/^\s*(\d{4})/);
+                    if (oldFmtMatch) {
+                        const lineNum = oldFmtMatch[1];
+                        let lineType = 'Unknown';
+                        if (line.includes('Primary 60-day Int') || line.includes('Primary 60-day In ') || line.includes('Primary 60-day In\t')) lineType = 'Primary 60-day Int';
+                        else if (line.includes('Primary 60-day AdH') || line.includes('Primary 60-day Ad ') || line.includes('Primary 60-day Ad\t')) lineType = 'Primary 60-day AdH';
+                        else if (/Primary 60-day\s*$/.test(line.trimEnd())) lineType = 'Primary 60-day Int';
+                        else if (line.includes('Primary Int') || line.includes('Primary In ') || line.includes('Primary In\t')) lineType = 'Primary Int';
+                        else if (line.includes('Primary AdH') || line.includes('Primary Ad ') || line.includes('Primary Ad\t')) lineType = 'Primary AdH';
+                        else if (line.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
+                        else if (line.includes('Secondary AdH') || line.includes('Secondary Ad ') || line.includes('Secondary Ad\t')) lineType = 'Secondary AdH';
+                        else if (line.includes('Reserve 60-day AdH') || line.includes('Reserve 60-day Ad ') || line.includes('Reserve 60-day Ad\t')) lineType = 'Reserve 60-day AdH';
+                        else if (line.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
+                        else if (line.includes('Reserve AdH') || line.includes('Reserve Ad ') || line.includes('Reserve Ad\t')) lineType = 'Reserve AdH';
+                        const numbers = line.match(/\d+\.?\d*/g);
+                        if (!numbers || numbers.length < 12) continue;
+                        lines[lineNum] = { lineNum, lineType,
+                            guarantee: parseFloat(numbers[numbers.length - 3]),
+                            tafb:      parseFloat(numbers[numbers.length - 2]),
+                            daysOff:   parseInt(numbers[numbers.length - 1]) };
+                    } else {
+                        const m = line.match(/\b747\s+(\d{4})\s+([\d.]+)(Primary|Secondary|Reserve)(.+?)\s+(\d{1,2})\s*$/);
+                        if (!m) continue;
+                        const lineTypeRaw = m[3] + m[4];
+                        let lineType = 'Unknown';
+                        if (lineTypeRaw.includes('Primary 60-day Int') || lineTypeRaw.includes('Primary 60-day In')) lineType = 'Primary 60-day Int';
+                        else if (lineTypeRaw.includes('Primary 60-day AdH') || lineTypeRaw.includes('Primary 60-day Ad')) lineType = 'Primary 60-day AdH';
+                        else if (/^Primary 60-day\s*$/.test(lineTypeRaw.trim())) lineType = 'Primary 60-day Int';
+                        else if (lineTypeRaw.includes('Primary Int') || lineTypeRaw.includes('Primary In')) lineType = 'Primary Int';
+                        else if (lineTypeRaw.includes('Primary AdH') || lineTypeRaw.includes('Primary Ad')) lineType = 'Primary AdH';
+                        else if (lineTypeRaw.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
+                        else if (lineTypeRaw.includes('Secondary AdH') || lineTypeRaw.includes('Secondary Ad')) lineType = 'Secondary AdH';
+                        else if (lineTypeRaw.includes('Reserve 60-day AdH') || lineTypeRaw.includes('Reserve 60-day Ad')) lineType = 'Reserve 60-day AdH';
+                        else if (lineTypeRaw.includes('Reserve 60-day')) lineType = 'Reserve 60-day AdH';
+                        else if (lineTypeRaw.includes('Reserve AdH') || lineTypeRaw.includes('Reserve Ad')) lineType = 'Reserve AdH';
+                        const numbers = line.match(/\d+\.?\d*/g);
+                        if (!numbers || numbers.length < 10) continue;
+                        lines[m[1]] = { lineNum: m[1], lineType,
+                            guarantee: parseFloat(numbers[9]),
+                            tafb:      parseFloat(m[2]),
+                            daysOff:   parseInt(m[5]) };
+                    }
                 }
             }
 
@@ -3070,7 +3124,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // Parse documents
                 const credit1Data = credit1Text ? parseCreditValue(credit1Text) : {};
                 const credit2Data = credit2Text ? parseCreditValue(credit2Text) : {};
-                
+
                 // Also try position-based parsing for more accurate date detection
                 const { lines: bidlinePositions, meta: bidlineMeta } = await parseBidlineWithPositions(bidlineFile);
 

@@ -126,9 +126,9 @@ async function listFiles(username, password, aircraft, base, crewPosition) {
     }
 
     if (!targetFolder) {
-        const err = new Error(`Could not parse bid-period date from folder names for ${aircraft} at ${base}.`);
-        err.statusCode = 404;
-        throw err;
+        // Fallback: alphabetically last matching folder (usually most recent)
+        targetFolder = matching.slice().sort((a, b) => b.Name.localeCompare(a.Name))[0];
+        console.log(`[fetch-bid] Date parse failed, falling back to: "${targetFolder.Name}". All matching: ${matching.map(f => f.Name).join(' | ')}`);
     }
 
     // 4. List all files inside the target folder
