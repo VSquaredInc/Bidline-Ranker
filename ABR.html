@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.3';
+        const APP_VERSION   = '1.5.4';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3306,8 +3306,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                     if (desiredDates.length > 0) {
                         // Determine vacation window (original or optimal slide) for filter credit
-                        const vacWinStart = vacScore && vacScore.recommendedSlideStart ? vacScore.recommendedSlideStart : vacStart;
-                        const vacWinEnd   = vacScore && vacScore.recommendedSlideEnd   ? vacScore.recommendedSlideEnd   : vacEnd;
+                        const vacWinStart = vacScore?.recommendedSlideStart ?? null;
+                        const vacWinEnd   = vacScore?.recommendedSlideEnd   ?? null;
 
                         if (bidlineInfo) {
                             for (const desiredDate of desiredDates) {
