@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.6';
+        const APP_VERSION   = '1.5.7';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3204,11 +3204,12 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const ltPasses = (filterPrimary   && lt.startsWith('Primary'))   ||
                                      (filterSecondary && lt.startsWith('Secondary')) ||
                                      (filterReserve   && lt.startsWith('Reserve'));
-                    if (!ltPasses) { excluded++; continue; }
+                    if (!ltPasses) { if (lineNum==='4156') console.log(`[4156 excluded] line type filter: ${lt}`); excluded++; continue; }
 
                     // Apply line duration filter
                     const is60Day = creditInfo.lineType.includes('60-day');
                     if (lineDurationFilter === 'bp1' && is60Day) {
+                        if (lineNum==='4156') console.log(`[4156 excluded] duration filter: bp1 only, line is 60-day`);
                         excluded++;
                         continue;
                     }
@@ -3337,6 +3338,18 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
 
                     if (!allDatesOff) {
+                        if (lineNum === '4156') {
+                            const vacWinStart2 = vacScore?.recommendedSlideStart ?? null;
+                            const vacWinEnd2   = vacScore?.recommendedSlideEnd   ?? null;
+                            const nativeOff = (bidlineInfo?.datesOff || []).map(d => `${d.getMonth()+1}/${d.getDate()}`).join(', ');
+                            console.log(`[4156 excluded] schedEnd=${schedEnd?.toDateString()} vacWin=${vacWinStart2?.toDateString()}–${vacWinEnd2?.toDateString()} nativeOff=[${nativeOff}]`);
+                            for (const dd of desiredDates) {
+                                const inSched = (bidlineInfo?.datesOff||[]).some(o => o.getFullYear()===dd.getFullYear()&&o.getMonth()===dd.getMonth()&&o.getDate()===dd.getDate());
+                                const afterEnd = dd > schedEnd;
+                                const inVac = vacMode && vacWinStart2 && vacWinEnd2 && dd >= vacWinStart2 && dd <= vacWinEnd2;
+                                if (!inSched && !afterEnd && !inVac) console.log(`  → FAIL date ${dd.getMonth()+1}/${dd.getDate()} inSched=${inSched} afterEnd=${afterEnd} inVac=${inVac}`);
+                            }
+                        }
                         excluded++;
                         continue;
                     }
@@ -3364,6 +3377,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                     // Apply contract minimum guarantee of 64 hours for any active line
                     const guarantee = Math.max(64, creditInfo.guarantee);
+                    if (lineNum==='4156') console.log(`[4156 PASSED all filters] type=${creditInfo.lineType} guarantee=${creditInfo.guarantee} schedEnd=${schedEnd?.toDateString()}`);
                     candidates.push({ lineNum, creditInfo, guarantee, lineAirports, bidlineInfo, trainScore, vacScore, nativeDaysOffBP1: datesOffBP1.length, nativeDaysOffBP2: datesOffBP2.length });
                 }
 
