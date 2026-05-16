@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.8';
+        const APP_VERSION   = '1.5.9';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3773,7 +3773,20 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     ? result.effectiveValue.toFixed(1)
                     : result.effectiveValue.toFixed(2);
 
-                const displayTrips = (optMode && result.modifiedTrips) ? result.modifiedTrips : result.trips;
+                let tripsCell;
+                if (optMode && result.modifiedTrips) {
+                    const origStr = formatTripDates(result.trips);
+                    const modStr  = formatTripDates(result.modifiedTrips);
+                    if (origStr === modStr) {
+                        tripsCell = origStr;
+                    } else {
+                        tripsCell = `<span style="color:var(--gray-500);text-decoration:line-through;font-size:0.78em;line-height:1.5">${origStr}</span>`
+                                  + `<span style="color:var(--gray-400);font-size:0.78em"> ▼</span><br>`
+                                  + modStr;
+                    }
+                } else {
+                    tripsCell = formatTripDates(result.trips);
+                }
 
                 tr.innerHTML = `
                     <td><span class="rank-badge ${rankClass}">${result.rank}</span></td>
@@ -3784,7 +3797,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     <td class="value-highlight" style="color: var(--gold);">${effValDisplay}</td>
                     ${frontDHCell}
                     ${backDHCell}
-                    <td class="trips-cell">${formatTripDates(displayTrips)}</td>
+                    <td class="trips-cell">${tripsCell}</td>
                     <td>${formatOptimizerCell(result)}</td>
                     <td class="airports-cell">${formatAirports(result.airports)}</td>
                 `;
