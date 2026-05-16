@@ -1530,37 +1530,49 @@
 
             <div class="help-section">
                 <h3>Overview</h3>
-                <p>This tool reads your Atlas Air bid documents and ranks every eligible bidline based on your personal preferences — desired days off, pay guarantee, and destination airports. The highest-ranked line is the best match for what you've told it matters most.</p>
+                <p>This tool reads your Atlas Air bid documents and ranks every eligible bidline based on your personal preferences — desired days off, pay guarantee, destination airports, and scheduled training or vacation conflicts. The highest-ranked line is the best match for what you've told it matters most.</p>
             </div>
 
             <div class="help-section">
-                <h3>Step 1 — The Three PDFs</h3>
+                <h3>Step 1 — Loading Documents</h3>
+                <p>Use either the <strong>Fetch from Portal</strong> tab (requires your Atlas Air credentials) or the <strong>Upload Manually</strong> tab to supply three PDFs:</p>
                 <ul>
-                    <li><strong>Bidline Schedule</strong> — The published bidline PDF from AIMS (e.g., <em>April 2026 Bidlines ORD 747 FO.pdf</em>). Contains the full schedule grid: days off (X markers), trip codes, departure airports, and deadhead legs for every line. <strong>Make sure you use the file for your crew position</strong> — CA and FO bidlines are separate documents.</li>
-                    <li><strong>Line Credit – Month 1</strong> — The <em>single-month</em> credit value report (e.g., <em>747 Lines Apr26–Apr26 Period.pdf</em>). Contains guarantee hours, TAFB, and days off per line for the first month.</li>
-                    <li><strong>Line Credit – Month 2</strong> — The <em>two-month cumulative</em> credit value report (e.g., <em>747 Lines Apr26–May26 Period.pdf</em>). Required to correctly average guarantee values for Bid Period 2 lines. If you are bidding a single bid period, upload the same single-month report here.</li>
+                    <li><strong>Bidline Schedule</strong> — The published bidline PDF from AIMS (e.g., <em>June 2026 Bidlines ORD 747 FO.pdf</em>). Contains the full schedule grid: days off (X markers), trip codes, departure airports, and deadhead legs for every line. <strong>Use the file for your crew position</strong> — CA and FO bidlines are separate documents.</li>
+                    <li><strong>Line Credit – Month 1</strong> — The <em>single-month</em> credit value report (e.g., <em>747 Lines Jun26–Jun26 Period.pdf</em>). Contains guarantee hours, TAFB, and days off per line for the first bid month.</li>
+                    <li><strong>Line Credit – Month 2</strong> — The <em>two-month cumulative</em> credit value report (e.g., <em>747 Lines Jun26–Jul26 Period.pdf</em>). Required to correctly average guarantee values for 60-day lines. If you are bidding only a single bid period, upload the same single-month report here.</li>
                 </ul>
             </div>
 
             <div class="help-section">
                 <h3>Step 2 — Preferences</h3>
                 <ul>
-                    <li><strong>Dates Desired Off</strong> — Enter the dates you want off. Only lines where <em>every</em> requested date is an off day (or falls after the line's schedule end) will appear in results. You can add multiple ranges.</li>
-                    <li><strong>Ranking Priority</strong> — Controls how days off are weighted against guarantee hours. <em>Guarantee</em>: days off ignored, lines ranked purely by average guaranteed credit hours. <em>Balanced</em>: days off valued at the CRT contractual rate (4.85 hrs/day). <em>Days Off</em>: days off valued at the full overtime rate (10.85 hrs/day), maximizing the ranking benefit of time away from work.</li>
-                    <li><strong>Line Type Filter</strong> — Primary lines are the lines you can hold based on seniority; Secondary lines are fallback holds; Reserve lines are on-call. Line subtypes are Int (International), AdH (Ad-Hoc), and 60-day variants of each. Filter to <em>Primary Only</em> for the most relevant results, or use <em>Primary &amp; Secondary</em> to exclude reserve.</li>
-                    <li><strong>Line Duration Filter</strong> — Bid Period 1 lines cover a single bid period; Bid Period 2 lines span two consecutive bid periods. Filter if you want to compare only one type.</li>
+                    <li><strong>Dates Desired Off</strong> — Enter the dates you want off. Only lines where <em>every</em> requested date is an off day (or falls after the line's schedule end, or is covered by your vacation window) will appear in results. You can add multiple ranges.</li>
+                    <li><strong>Ranking Priority</strong> — Controls how days off are weighted against guarantee hours. <em>Guarantee</em>: days off ignored, lines ranked purely by average guaranteed credit hours. <em>Balanced</em>: days off valued at the CRT contractual rate (4.85 hrs/day). <em>Days Off</em>: days off valued at the full overtime rate (10.85 hrs/day).</li>
+                    <li><strong>Line Type Filter</strong> — Primary lines are the lines you can hold based on seniority; Secondary are fallback holds; Reserve are on-call. Line subtypes: Int (International), AdH (Ad-Hoc), and 60-day variants. Filter to <em>Primary Only</em> for the most relevant results.</li>
+                    <li><strong>Line Duration Filter</strong> — Bid Period 1 lines cover one bid month; 60-day lines span two consecutive bid months. Filter if you want to compare only one type.</li>
                     <li><strong>Airport Preferences</strong> — Enter airports you prefer or want to avoid (comma-separated IATA codes). A non-absolute preference applies a percentage bonus or penalty to Effective Value. Checking <em>Absolute</em> completely excludes lines that don't meet the criteria.</li>
+                </ul>
+            </div>
+
+            <div class="help-section">
+                <h3>Step 3 — Conflict Optimizer (optional)</h3>
+                <p>Enable <strong>Training Mode</strong>, <strong>Vacation Mode</strong>, or both to factor known schedule conflicts into the ranking. Each mode re-scores affected bid periods using <em>Effective Days Off</em> rather than guarantee hours, so lines with better conflict placement rank higher.</p>
+                <ul>
+                    <li><strong>Training Mode</strong> — Enter your scheduled training start and end dates. Training on a <em>workday</em> is ideal: the pilot is scheduled to fly anyway, so training effectively replaces that trip and frees the day. Training on an <em>off day</em> costs the pilot a scheduled day off. The Optimizer column shows the result per period: <span style="color:#4ade80">✓ Xd on days</span> (all workdays — best), <span style="color:#f97316">Xd/Yd on ⚠</span> (partial overlap), or <span style="color:#ef4444">✗ Xd off days</span> (all off days — worst).</li>
+                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within the CBA anchor rule (the slid block must overlap at least one day of your awarded dates) to find the position that maximizes effective days off. <em>Vacation workdays</em> are trip days covered by vacation. <em>Award days</em> are uncovered workdays at either edge of a trip pairing when vacation starts or ends within 3 days of the pairing boundary — the company cannot effectively utilize you for those days. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days).</li>
+                    <li><strong>60-day lines</strong> — Results are shown per bid period (BP1 / BP2) so you can see exactly which period each conflict affects.</li>
                 </ul>
             </div>
 
             <div class="help-section">
                 <h3>Understanding the Results</h3>
                 <ul>
-                    <li><strong>Eff. Value</strong> — The composite score used for ranking. Higher is better.</li>
-                    <li><strong>Avg Guarantee / Avg Days Off</strong> — Both are averaged to represent a single bid period, so Bid Period 1 and Bid Period 2 lines are directly comparable. Reserve lines do not appear in the credit PDFs; a contract minimum of 64 hours is applied to any line with no published guarantee.</li>
+                    <li><strong>Eff. Value</strong> — The composite score used for ranking. Higher is better. In Conflict Mode this reflects effective days off × day-off value for affected periods rather than raw guarantee.</li>
+                    <li><strong>Avg Guarantee / Avg Days Off</strong> — Both averaged across bid periods so BP1 and 60-day lines are directly comparable. Reserve lines use a contract minimum of 64 hours when no credit PDF data is available. These columns are grayed out in Conflict Mode because effective days off drives the ranking instead.</li>
                     <li><strong>Front DH</strong> — Number of trips where you deadhead commercially <em>from</em> base to start the pairing.</li>
                     <li><strong>Back DH</strong> — Number of trips where you deadhead commercially <em>to</em> base to end the pairing.</li>
-                    <li><strong>Trips</strong> — Date ranges of each trip pairing in the bid period.</li>
+                    <li><strong>Trips</strong> — Date ranges of each trip pairing. In Conflict Mode, the cell shows two sections: <em>Before</em> (original schedule, crossed out) and <em>After</em> (remaining trips after vacation and training are applied). Training dates appear at the bottom of the After section labeled <em>tng</em>.</li>
+                    <li><strong>Optimizer</strong> — Visible only in Conflict Mode. Shows training and vacation placement quality per bid period. See Step 3 above for color meanings.</li>
                     <li><strong>Airports</strong> — All airports visited during the bid period.</li>
                 </ul>
             </div>
@@ -1570,17 +1582,14 @@
                 <div class="help-formula">
 Base Value    = Avg Guarantee + ((Avg Days Off − Group Avg Days Off) × Day Off Value)
 
-Airport bonus = (Bonus% / 100) × Value Range × log₂(1 + matched airports)
+Airport bonus   = (Bonus% / 100) × Value Range × log₂(1 + matched airports)
 Airport penalty = (Penalty% / 100) × Value Range × log₂(1 + matched airports)
 
 Effective Value = Base Value + Airport Bonus − Airport Penalty
                 </div>
                 <p>Avg Guarantee and Avg Days Off are averaged across bid periods so BP1 and 60-day lines are directly comparable. The days-off component is relative to the group average — lines above average score higher, lines below score lower.</p>
                 <p>Airport adjustments are relative to the spread (max − min) of base values in the filtered group, with diminishing returns for each additional matched airport (log₂ scale: 1 match = 10%, 2 = 15.8%, 3 = 20%).</p>
-                <p>Example: group avg days off = 14, value range = 40, a line with 75 hrs guarantee, 16 days off, Ranking Priority set to Balanced (4.85 hrs/day), matching 2 whitelisted airports at 10%:<br>
-                Base: 75 + ((16 − 14) × 4.85) = 84.70<br>
-                Bonus: (0.10 × 40 × log₂(3)) = 6.34<br>
-                Effective Value = <strong>91.04</strong></p>
+                <p><strong>Conflict Mode scoring</strong> — For any bid period where training or vacation overlaps the schedule, the period score switches to: <em>Effective Days Off × Day Off Value</em>, where Effective Days Off = native off days + vacation workdays covered + award days + training workdays covered − training off days consumed. This rewards lines that absorb conflicts into already-scheduled work and penalizes lines that consume your time off.</p>
                 <p><strong>Ranking Priority</strong> — Guarantee: days off ignored (0 hrs/day); Balanced: CRT contractual rate (4.85 hrs/day); Days Off: full overtime value (10.85 hrs/day).</p>
             </div>
         </div>
@@ -1603,7 +1612,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.1';
+        const APP_VERSION   = '1.6.2';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
