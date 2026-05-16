@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.0';
+        const APP_VERSION   = '1.6.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3475,6 +3475,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         trips:   rawTrips,
                         modifiedTrips,
                         trainScore,
+                        trainStart,
+                        trainEnd,
                         vacScore,
                         vacMode,
                         trainMode,
@@ -3783,13 +3785,21 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 if (optMode && result.modifiedTrips) {
                     const origStr = formatTripDates(result.trips);
                     const modStr  = formatTripDates(result.modifiedTrips);
+                    // Build training block label if training mode is active
+                    let tngStr = '';
+                    if (result.trainMode && result.trainStart && result.trainEnd) {
+                        const ts = result.trainStart, te = result.trainEnd;
+                        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        const tngRange = `${mon[ts.getMonth()]} ${ts.getDate()}–${ts.getMonth()===te.getMonth() ? te.getDate() : mon[te.getMonth()]+' '+te.getDate()}`;
+                        tngStr = `<br><span style="color:var(--gray-400);font-size:0.85em">tng ${tngRange}</span>`;
+                    }
                     if (origStr === modStr) {
-                        tripsCell = origStr;
+                        tripsCell = origStr + tngStr;
                     } else {
                         tripsCell = `<span style="color:var(--gray-500);font-size:0.72em;text-transform:uppercase;letter-spacing:0.05em">Before</span><br>`
                                   + `<span style="color:var(--gray-500);text-decoration:line-through;font-size:0.85em;line-height:1.5">${origStr}</span><br>`
                                   + `<span style="color:var(--gray-500);font-size:0.72em;text-transform:uppercase;letter-spacing:0.05em">After</span><br>`
-                                  + modStr;
+                                  + modStr + tngStr;
                     }
                 } else {
                     tripsCell = formatTripDates(result.trips);
