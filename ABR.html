@@ -1603,7 +1603,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.5.9';
+        const APP_VERSION   = '1.6.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2786,26 +2786,31 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return merged;
         }
 
-        // Compute vacation workday coverage and award days for a set of trips (one period)
-        // given the union of all slid vacation windows.
-        function evalVacContribForPeriod(trips, unionWindows) {
+        // Compute vacation workday coverage and award days for a set of trips (one period).
+        // periodStart/periodEnd optionally clip trips to the period boundary so that
+        // cross-period trips are attributed correctly to each bid period.
+        function evalVacContribForPeriod(trips, unionWindows, periodStart, periodEnd) {
             let vacWorkdays = 0, awardDays = 0;
             for (const trip of trips) {
-                const overlapping = unionWindows.filter(w => w.start <= trip.end && w.end >= trip.start);
+                // Clip trip to period boundaries
+                const tStart = periodStart && trip.start < periodStart ? periodStart : trip.start;
+                const tEnd   = periodEnd   && trip.end   > periodEnd   ? periodEnd   : trip.end;
+                if (tStart > tEnd) continue; // trip entirely outside this period
+                const overlapping = unionWindows.filter(w => w.start <= tEnd && w.end >= tStart);
                 if (overlapping.length === 0) continue;
-                // Clip each window to trip bounds and merge
+                // Clip each window to the clipped trip bounds and merge
                 const covered = mergeIntervals(overlapping.map(w => ({
-                    start: w.start > trip.start ? w.start : trip.start,
-                    end:   w.end   < trip.end   ? w.end   : trip.end
+                    start: w.start > tStart ? w.start : tStart,
+                    end:   w.end   < tEnd   ? w.end   : tEnd
                 })));
                 for (const ci of covered) {
                     vacWorkdays += Math.round((ci.end - ci.start) / 86400000) + 1;
                 }
-                // Award Days from uncovered workdays at trip edges
+                // Award Days from uncovered workdays at clipped trip edges
                 const firstStart = covered[0].start;
                 const lastEnd    = covered[covered.length - 1].end;
-                const daysBefore = firstStart > trip.start ? Math.round((firstStart - trip.start) / 86400000) : 0;
-                const daysAfter  = lastEnd    < trip.end   ? Math.round((trip.end  - lastEnd)    / 86400000) : 0;
+                const daysBefore = firstStart > tStart ? Math.round((firstStart - tStart) / 86400000) : 0;
+                const daysAfter  = lastEnd    < tEnd   ? Math.round((tEnd - lastEnd)      / 86400000) : 0;
                 const aA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
                 const aB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
                 awardDays = Math.max(awardDays, aA, aB);
@@ -3244,12 +3249,12 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         const trainInBP2 = bp2Start && trainEnd >= bp2Start;
 
                         const tsBP1 = trainInBP1
-                            ? computeTrainingScore(tripsBP1,
+                            ? computeTrainingScore(lineTrips,
                                 trainStart,
                                 (trainEnd <= periodEnd1) ? trainEnd : periodEnd1)
                             : null;
                         const tsBP2 = trainInBP2
-                            ? computeTrainingScore(tripsBP2,
+                            ? computeTrainingScore(lineTrips,
                                 (trainStart >= bp2Start) ? trainStart : bp2Start,
                                 trainEnd)
                             : null;
@@ -3273,9 +3278,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         }));
                         slidUnionWindows = mergeIntervals(slidWindows);
 
-                        // Per-period contributions from union windows
-                        const vcBP1 = evalVacContribForPeriod(tripsBP1, slidUnionWindows);
-                        const vcBP2 = evalVacContribForPeriod(tripsBP2, slidUnionWindows);
+                        // Per-period contributions from union windows (clip cross-period trips at bp2Start)
+                        const bp2End1 = bp2Start ? new Date(bp2Start.getTime() - 86400000) : null;
+                        const vcBP1 = evalVacContribForPeriod(lineTrips, slidUnionWindows, null, bp2End1);
+                        const vcBP2 = evalVacContribForPeriod(lineTrips, slidUnionWindows, bp2Start, null);
 
                         const effBP1 = datesOffBP1.length + vcBP1.vacWorkdays + vcBP1.awardDays;
                         const effBP2 = datesOffBP2.length + vcBP2.vacWorkdays + vcBP2.awardDays;
@@ -3780,8 +3786,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     if (origStr === modStr) {
                         tripsCell = origStr;
                     } else {
-                        tripsCell = `<span style="color:var(--gray-500);text-decoration:line-through;font-size:0.78em;line-height:1.5">${origStr}</span>`
-                                  + `<span style="color:var(--gray-400);font-size:0.78em"> ▼</span><br>`
+                        tripsCell = `<span style="color:var(--gray-500);font-size:0.72em;text-transform:uppercase;letter-spacing:0.05em">Before</span><br>`
+                                  + `<span style="color:var(--gray-500);text-decoration:line-through;font-size:0.85em;line-height:1.5">${origStr}</span><br>`
+                                  + `<span style="color:var(--gray-500);font-size:0.72em;text-transform:uppercase;letter-spacing:0.05em">After</span><br>`
                                   + modStr;
                     }
                 } else {
