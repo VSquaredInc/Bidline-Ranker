@@ -1612,7 +1612,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.5';
+        const APP_VERSION   = '1.6.6';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2950,8 +2950,13 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     : 0;
 
                 // Award Days: ≤3 workdays at either end of pairing (one set, take the better)
-                const awardA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
-                const awardB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
+                // Teaching Topic: award days may not fall in company-designated exempt weeks
+                const preEnd    = new Date(slideStart.getTime() - 86400000);
+                const postStart = new Date(slideEnd.getTime()   + 86400000);
+                const awardA = (daysBefore > 0 && daysBefore <= 3 &&
+                                exemptWeeksIn(trip.start, preEnd).size === 0) ? daysBefore : 0;
+                const awardB = (daysAfter  > 0 && daysAfter  <= 3 &&
+                                exemptWeeksIn(postStart, trip.end).size === 0) ? daysAfter  : 0;
                 awardDays = Math.max(awardDays, awardA, awardB);
             }
 
