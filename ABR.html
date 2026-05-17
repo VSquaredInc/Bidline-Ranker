@@ -1612,7 +1612,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.4';
+        const APP_VERSION   = '1.6.5';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2962,10 +2962,35 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             };
         }
 
+        // CBA Art. 25.K — company-designated exempt weeks (historically 25, 26, 46, 51)
+        // Vacations may slide OUT of these weeks but NOT into them.
+        const EXEMPT_ISO_WEEKS = [25, 26, 46, 51];
+
+        function getISOWeek(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const day = d.getUTCDay() || 7; // ISO: Mon=1 … Sun=7
+            d.setUTCDate(d.getUTCDate() + 4 - day); // shift to nearest Thursday
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+        // Returns the Set of EXEMPT_ISO_WEEKS that overlap [start, end] (inclusive)
+        function exemptWeeksIn(start, end) {
+            const found = new Set();
+            for (let ms = start.getTime(); ms <= end.getTime(); ms += 86400000) {
+                const w = getISOWeek(new Date(ms));
+                if (EXEMPT_ISO_WEEKS.includes(w)) found.add(w);
+            }
+            return found;
+        }
+
         // Find the optimal vacation slide within CBA anchor rule and return scoring
         function computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd) {
             const vacLength  = Math.round((vacEnd - vacStart) / 86400000) + 1;
             const naturalOff = datesOff.filter(d => d <= scheduleEnd).length;
+
+            // Exempt weeks the original awarded vacation already falls in — sliding OUT is OK
+            const origExemptWeeks = exemptWeeksIn(vacStart, vacEnd);
 
             // Anchor rule: slid block must overlap at least 1 day of the original awarded dates
             // → slideStart ∈ [vacStart-(vacLength-1), vacEnd]
@@ -3002,6 +3027,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 const sEnd   = new Date(ms + (vacLength - 1) * 86400000);
 
                 if (sEnd > scheduleEnd) continue; // don't slide past schedule
+
+                // Cannot slide INTO an exempt week that the original vacation wasn't already in
+                const candExempt = exemptWeeksIn(sStart, sEnd);
+                if ([...candExempt].some(w => !origExemptWeeks.has(w))) continue;
 
                 const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
 
