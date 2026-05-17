@@ -1612,7 +1612,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.2';
+        const APP_VERSION   = '1.6.4';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2972,13 +2972,32 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const minStartMs = vacStart.getTime() - (vacLength - 1) * 86400000;
             const maxStartMs = vacEnd.getTime();
 
+            // CBA partial-conflict rule: if the original position is partially conflicted,
+            // the slide may not go past the first position of full conflict in either direction.
+            const origEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
+            const isPartiallyConflicted = origEval.vacWorkdays > 0 && origEval.vacWorkdays < vacLength;
+
+            let effectiveMinStart = minStartMs;
+            let effectiveMaxStart = maxStartMs;
+
+            if (isPartiallyConflicted) {
+                for (let ms = vacStart.getTime() - 86400000; ms >= minStartMs; ms -= 86400000) {
+                    const r = evalVacPosition(new Date(ms), new Date(ms + (vacLength - 1) * 86400000), trips, naturalOff);
+                    if (r.vacWorkdays >= vacLength) { effectiveMinStart = ms; break; }
+                }
+                for (let ms = vacStart.getTime() + 86400000; ms <= maxStartMs; ms += 86400000) {
+                    const r = evalVacPosition(new Date(ms), new Date(ms + (vacLength - 1) * 86400000), trips, naturalOff);
+                    if (r.vacWorkdays >= vacLength) { effectiveMaxStart = ms; break; }
+                }
+            }
+
             let bestEff       = -1;
             let bestAward     = 0;
             let bestVacWork   = 0;
             let bestSlideStart = null;
             let bestSlideEnd   = null;
 
-            for (let ms = minStartMs; ms <= maxStartMs; ms += 86400000) {
+            for (let ms = effectiveMinStart; ms <= effectiveMaxStart; ms += 86400000) {
                 const sStart = new Date(ms);
                 const sEnd   = new Date(ms + (vacLength - 1) * 86400000);
 
@@ -3218,12 +3237,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const ltPasses = (filterPrimary   && lt.startsWith('Primary'))   ||
                                      (filterSecondary && lt.startsWith('Secondary')) ||
                                      (filterReserve   && lt.startsWith('Reserve'));
-                    if (!ltPasses) { if (lineNum==='4156') console.log(`[4156 excluded] line type filter: ${lt}`); excluded++; continue; }
+                    if (!ltPasses) { excluded++; continue; }
 
                     // Apply line duration filter
                     const is60Day = creditInfo.lineType.includes('60-day');
                     if (lineDurationFilter === 'bp1' && is60Day) {
-                        if (lineNum==='4156') console.log(`[4156 excluded] duration filter: bp1 only, line is 60-day`);
                         excluded++;
                         continue;
                     }
@@ -3353,18 +3371,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
 
                     if (!allDatesOff) {
-                        if (lineNum === '4156') {
-                            const vacWinStart2 = vacScore?.recommendedSlideStart ?? null;
-                            const vacWinEnd2   = vacScore?.recommendedSlideEnd   ?? null;
-                            const nativeOff = (bidlineInfo?.datesOff || []).map(d => `${d.getMonth()+1}/${d.getDate()}`).join(', ');
-                            console.log(`[4156 excluded] schedEnd=${schedEnd?.toDateString()} vacWin=${vacWinStart2?.toDateString()}–${vacWinEnd2?.toDateString()} nativeOff=[${nativeOff}]`);
-                            for (const dd of desiredDates) {
-                                const inSched = (bidlineInfo?.datesOff||[]).some(o => o.getFullYear()===dd.getFullYear()&&o.getMonth()===dd.getMonth()&&o.getDate()===dd.getDate());
-                                const afterEnd = dd > schedEnd;
-                                const inVac = vacMode && vacWinStart2 && vacWinEnd2 && dd >= vacWinStart2 && dd <= vacWinEnd2;
-                                if (!inSched && !afterEnd && !inVac) console.log(`  → FAIL date ${dd.getMonth()+1}/${dd.getDate()} inSched=${inSched} afterEnd=${afterEnd} inVac=${inVac}`);
-                            }
-                        }
                         excluded++;
                         continue;
                     }
@@ -3453,12 +3459,14 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         const bp1G  = creditInfo.bp1Guarantee  ?? creditInfo.guarantee;
                         const bp2G  = creditInfo.bp2Guarantee  ?? creditInfo.guarantee;
                         const bp1DO = creditInfo.bp1DaysOff    ?? creditInfo.daysOff;
-                        const bp2DO = creditInfo.bp2DaysOff    ?? creditInfo.daysOff;
+                        // Use native bidline BP2 off-day count when credit file is absent
+                        const bp2DO = creditInfo.bp2DaysOff    ?? nativeDaysOffBP2 ?? creditInfo.daysOff;
 
                         const bp1Score = bp1Conflicted
                             ? effDaysOffBP1 * conflictDayValue
                             : bp1G + (bp1DO - avgDaysOff) * dayOffValue;
-                        const bp2Score = (is60Day && creditInfo.bp2Guarantee != null)
+                        // Score BP2 when credit is available OR when native bidline data exists
+                        const bp2Score = (is60Day && (creditInfo.bp2Guarantee != null || nativeDaysOffBP2 > 0))
                             ? (bp2Conflicted ? effDaysOffBP2 * conflictDayValue : bp2G + (bp2DO - avgDaysOff) * dayOffValue)
                             : null;
 
@@ -3471,7 +3479,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         ? computeModifiedTrips(rawTrips, slidUnionWins, trainStart, trainEnd)
                         : null;
 
-                    if (lineNum==='4156') console.log(`[4156 score] effectiveValue=${((vacMode||trainMode)?optimizerEffValue:effectiveValue).toFixed(2)} bp1Conflicted=${bp1Conflicted} bp2Conflicted=${bp2Conflicted} effDaysOffBP1=${effDaysOffBP1} effDaysOffBP2=${effDaysOffBP2} bp1G=${creditInfo.bp1Guarantee??creditInfo.guarantee} bp2G=${creditInfo.bp2Guarantee??'null'} nativeBP1=${nativeDaysOffBP1} nativeBP2=${nativeDaysOffBP2} trainBP2=${JSON.stringify(trainScore?.trainScoreBP2)} vacBP2=${JSON.stringify(vacScore?.vacContribBP2)}`);
                     results.push({
                         lineNum,
                         lineType: creditInfo.lineType,
@@ -3502,7 +3509,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 results.sort((a, b) => b.effectiveValue - a.effectiveValue);
 
                 // Add rank
-                results.forEach((r, i) => { r.rank = i + 1; if (r.lineNum==='4156') console.log(`[4156 rank] ${i+1} of ${results.length} (effectiveValue=${r.effectiveValue.toFixed(2)})`); });
+                results.forEach((r, i) => { r.rank = i + 1; });
 
                 
                 rankedResults = results;
