@@ -26,9 +26,10 @@ Christopher is an Atlas Air pilot building this tool for personal and eventual c
 ## Required Steps After Every Editing Session
 
 1. **Bump `APP_VERSION`** in ABR.html — patch (1.2.0→1.2.1) for small fixes, minor (1.2.0→1.3.0) for meaningful feature/fix sets.
-2. **Create a backup** — copy ABR.html to `backups/ABR_backup_YYYYMMDD_HHMMSS.html`.
-3. **Commit and push** to GitHub — triggers GitHub Pages update automatically.
-4. **Redeploy Vercel** if `api/fetch-bid.js` changed — user runs `npx vercel --prod` from the project directory.
+2. **Bump `CACHE_NAME`** in service-worker.js — increment the number (e.g., `v9` → `v10`). **CRITICAL: this is what forces all existing users to download the new ABR.html.** If this is skipped, every returning visitor continues to run the old cached version indefinitely, regardless of how many times ABR.html is redeployed.
+3. **Create a backup** — copy ABR.html to `backups/ABR_backup_YYYYMMDD_HHMMSS.html`.
+4. **Commit and push** to GitHub — triggers GitHub Pages update automatically.
+5. **Redeploy Vercel** if `api/fetch-bid.js` changed — user runs `npx vercel --prod` from the project directory.
 
 ---
 
