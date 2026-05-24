@@ -1613,7 +1613,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.9';
+        const APP_VERSION   = '1.7.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2039,13 +2039,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     if (!bidPeriodStart) {
                         bidPeriodStart = new Date(parseInt(periodMatch[3]), parseInt(periodMatch[1]) - 1, parseInt(periodMatch[2]));
                     }
-                    if (pageNum <= 3 || pageNum === 30) {
-                        console.log(`Page ${pageNum}: Detected schedule end = ${pageScheduleEnd.toDateString()}`);
-                    }
                 } else {
-                    if (pageNum <= 3) {
-                        console.log(`Page ${pageNum}: No schedule period match found. Sample text:`, fullPageText.substring(0, 200));
-                    }
                 }
 
                 // Extract base airport, aircraft type, and crew position from page header
@@ -2448,18 +2442,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
                 }
             
-            // Debug: summarize parsed lines
-            const lineNums = Object.keys(lines);
-            console.log(`parseBidlineWithPositions: Found ${lineNums.length} lines`);
-            if (lineNums.length > 0) {
-                // Show first 3 lines with their scheduleEnd
-                for (let i = 0; i < Math.min(3, lineNums.length); i++) {
-                    const ln = lineNums[i];
-                    const info = lines[ln];
-                    console.log(`  Line ${ln}: scheduleEnd=${info.scheduleEnd ? info.scheduleEnd.toDateString() : 'undefined'}, datesOff=${info.datesOff ? info.datesOff.length : 0}`);
-                }
-            }
-
             return { lines, meta: { baseAirport, aircraftType, crewPosition } };
         }
 
@@ -2473,7 +2455,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             // Robust fallbacks: title and BID MONTH header present in all new-format credit PDFs
             const hasCreditTitle   = /LINE\s+PAY\s+AND\s+CREDIT\s+VALUE/i.test(text);
             const hasBidMonthHdr   = /BID\s+MONTH/i.test(text);
-            console.log('[detectFileType]', { hasDateCols, hasSchedHdr, hasCrewSchedHdr, hasCreditRows, hasCreditNewFmt, hasCreditTitle, hasBidMonthHdr, head: JSON.stringify(text.slice(0, 300)) });
             if (hasCrewSchedHdr) return 'bidline';
             if (hasDateCols && hasSchedHdr) return 'bidline';
             if (hasCreditRows || hasCreditNewFmt || hasCreditTitle || hasBidMonthHdr) return 'credit';
@@ -2602,7 +2583,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 }
             }
 
-            console.log(`parseCreditValue: Found ${Object.keys(lines).length} lines`);
             return lines;
         }
 
@@ -3082,7 +3062,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     if (!bidlinePositions[lineNum]) delete mergedCredit[lineNum];
                 }
 
-                console.log(`mergedCredit has ${Object.keys(mergedCredit).length} lines`);
 
                 // Filter and score lines
                 const results = [];
@@ -3378,7 +3357,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     });
                 });
 
-                console.log(`Filtering complete: ${results.length} passed, ${excluded} excluded`);
 
                 // Sort by effective value descending
                 results.sort((a, b) => b.effectiveValue - a.effectiveValue);

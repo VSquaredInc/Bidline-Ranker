@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.6.9 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v12` (in service-worker.js)  
+**Current version:** 1.7.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v13` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -226,7 +226,6 @@ Content is real only if it matches: airport pattern (3-letter, not in excludeCod
 
 - **ISO week accuracy:** July 4, 2026 is ISO week 27 — verify published Jun/Jul 2026 bid materials confirm which weeks Atlas Air designated as exempt for this cycle. Update `EXEMPT_ISO_WEEKS` if needed.
 - **ANC CA pilot confirmation:** The vacation slide fix (partial conflict cap, v1.6.4+) has not yet been confirmed working by the ANC CA pilot who reported the original bug.
-- **Debug logging:** `console.log` statements gated on `lineNum==='4156'` remain in ABR.html from v1.5.7/v1.5.8. Remove at the start of the next coding session.
 
 ---
 
