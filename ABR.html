@@ -1304,6 +1304,7 @@
                     <select id="lineDurationFilter">
                         <option value="all">Both Bid Periods</option>
                         <option value="bp1">Bid Period 1 Only</option>
+                        <option value="bp2">60-day Only</option>
                     </select>
                 </div>
             </div>
@@ -1549,7 +1550,7 @@
                     <li><strong>Dates Desired Off</strong> — Enter the dates you want off. Only lines where <em>every</em> requested date is an off day (or falls after the line's schedule end, or is covered by your vacation window) will appear in results. You can add multiple ranges.</li>
                     <li><strong>Ranking Priority</strong> — Controls how days off are weighted against guarantee hours. <em>Guarantee</em>: days off ignored, lines ranked purely by average guaranteed credit hours. <em>Balanced</em>: days off valued at the CRT contractual rate (4.85 hrs/day). <em>Days Off</em>: days off valued at the full overtime rate (10.85 hrs/day).</li>
                     <li><strong>Line Type Filter</strong> — Primary lines are the lines you can hold based on seniority; Secondary are fallback holds; Reserve are on-call. Line subtypes: Int (International), AdH (Ad-Hoc), and 60-day variants. Filter to <em>Primary Only</em> for the most relevant results.</li>
-                    <li><strong>Line Duration Filter</strong> — Bid Period 1 lines cover one bid month; 60-day lines span two consecutive bid months. Filter if you want to compare only one type.</li>
+                    <li><strong>Line Duration Filter</strong> — Bid Period 1 lines cover one bid month; 60-day lines span two consecutive bid months. Choose <em>Bid Period 1 Only</em> or <em>60-day Only</em> to see just one type, or <em>Both Bid Periods</em> for everything.</li>
                     <li><strong>Airport Preferences</strong> — Enter airports you prefer or want to avoid (comma-separated IATA codes). A non-absolute preference applies a percentage bonus or penalty to Effective Value. Checking <em>Absolute</em> completely excludes lines that don't meet the criteria.</li>
                 </ul>
             </div>
@@ -1612,7 +1613,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.6.7';
+        const APP_VERSION   = '1.6.9';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -1997,113 +1998,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             }
             
             return fullText;
-        }
-
-        // Parse bidline schedule to extract days off for each line
-        function parseBidlineSchedule(text) {
-            const lines = {};
-            const datePattern = /([A-Z][a-z]{2})(\d{1,2})/g;
-            
-            // Find all dates in header - looking for patterns like "Jan31", "Feb01", etc.
-            const headerMatch = text.match(/Jan\d{1,2}|Feb\d{1,2}|Mar\d{1,2}|Apr\d{1,2}|May\d{1,2}|Jun\d{1,2}|Jul\d{1,2}|Aug\d{1,2}|Sep\d{1,2}|Oct\d{1,2}|Nov\d{1,2}|Dec\d{1,2}/g);
-            
-            if (!headerMatch) {
-                console.error('Could not find date headers');
-                return lines;
-            }
-
-            // Get unique dates in order (they repeat on each page)
-            const uniqueDates = [];
-            const seenDates = new Set();
-            for (const d of headerMatch) {
-                if (!seenDates.has(d)) {
-                    seenDates.add(d);
-                    uniqueDates.push(d);
-                }
-                if (uniqueDates.length >= 31) break; // Max days in bid period
-            }
-
-            // Parse the year from the document
-            const yearMatch = text.match(/SCHEDULE FROM\s*:\s*(\d{2})\/(\d{2})\/(\d{4})/);
-            const baseYear = yearMatch ? parseInt(yearMatch[3]) : new Date().getFullYear();
-
-            // Convert date strings to Date objects
-            const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5, 
-                              'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
-            
-            const dateObjects = uniqueDates.map(d => {
-                const month = d.substring(0, 3);
-                const day = parseInt(d.substring(3));
-                let year = baseYear;
-                // Handle year rollover
-                if (monthMap[month] === 0 && uniqueDates.some(ud => ud.startsWith('Dec'))) {
-                    year = baseYear; // January of current period
-                }
-                return new Date(year, monthMap[month], day);
-            });
-
-            // Find bidline blocks - look for 4-digit line numbers
-            const linePattern = /(\d{4})\s+(Primary|Secondary|Reserve)\s+(Int|AdH|60-day\s+Int|60-day\s+AdH)/gi;
-            let match;
-            
-            // Create a more detailed parsing approach
-            // Split by line separator patterns
-            const blocks = text.split(/_{20,}/);
-            
-            for (const block of blocks) {
-                // Look for line number pattern
-                const lineMatch = block.match(/(\d{4})\s+(Primary|Secondary|Reserve)/i);
-                if (!lineMatch) continue;
-                
-                const lineNum = lineMatch[1];
-                
-                // Determine line type
-                let lineType = lineMatch[2];
-                if (block.includes('60-day')) {
-                    lineType += ' 60-day';
-                }
-                if (block.match(/\bInt\b/i)) {
-                    lineType += ' Int';
-                } else if (block.match(/\bAdH\b/i)) {
-                    lineType += ' AdH';
-                }
-                
-                // Find days off - count X markers
-                // Look for DaysOFF pattern
-                const daysOffMatch = block.match(/DaysOFF>\s*(\d+)/);
-                const daysOffCount = daysOffMatch ? parseInt(daysOffMatch[1]) : 0;
-                
-                // Determine which specific dates are off
-                // This is complex due to the multi-line format
-                // We'll use the presence of 'X' markers in appropriate positions
-                const datesOff = [];
-                
-                // Find the first line of the block which contains the date markers
-                const firstLineMatch = block.match(/ORD\s+744\s+FO\s+(.+)/);
-                if (firstLineMatch) {
-                    const dateLineContent = firstLineMatch[1];
-                    
-                    // Split by whitespace and analyze each cell
-                    const cells = dateLineContent.split(/\s+/).filter(c => c.length > 0);
-                    
-                    // Map cells to dates - cells contain either X (day off), WORK, or trip info
-                    for (let i = 0; i < Math.min(cells.length, dateObjects.length); i++) {
-                        const cell = cells[i];
-                        if (cell === 'X') {
-                            datesOff.push(dateObjects[i]);
-                        }
-                    }
-                }
-                
-                lines[lineNum] = {
-                    lineNum,
-                    lineType: lineType.trim(),
-                    daysOffCount,
-                    datesOff
-                };
-            }
-            
-            return { lines, dateObjects };
         }
 
         // Parse bidline by analyzing text positions carefully
@@ -2712,61 +2606,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return lines;
         }
 
-        // Simpler text-based bidline parser
-        function parseSimpleBidline(text) {
-            const lines = {};
-            
-            // Find schedule period dates
-            const periodMatch = text.match(/SCHEDULE FROM\s*:\s*(\d{2})\/(\d{2})\/(\d{4})\s+TO\s+(\d{2})\/(\d{2})\/(\d{4})/);
-            if (!periodMatch) {
-                console.error('Could not find schedule period');
-                return { lines: {}, startDate: null, endDate: null };
-            }
-            
-            const startDate = new Date(parseInt(periodMatch[3]), parseInt(periodMatch[1]) - 1, parseInt(periodMatch[2]));
-            const endDate = new Date(parseInt(periodMatch[6]), parseInt(periodMatch[4]) - 1, parseInt(periodMatch[5]));
-            
-            // Generate all dates in the period
-            const allDates = [];
-            const currentDate = new Date(startDate);
-            while (currentDate <= endDate) {
-                allDates.push(new Date(currentDate));
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
-            
-            // Parse each line block
-            // Look for patterns like "4111 Primary Int" and "DaysOFF> 13"
-            const lineBlocks = text.split(/(?=\d{4}\s+(?:Primary|Secondary|Reserve))/);
-            
-            for (const block of lineBlocks) {
-                const lineMatch = block.match(/^(\d{4})\s+(Primary|Secondary|Reserve)\s*(60-day)?\s*(Int|AdH|In|Ad)?/);
-                if (!lineMatch) continue;
-
-                const lineNum = lineMatch[1];
-                let lineType = lineMatch[2];
-                if (lineMatch[3]) lineType += ' ' + lineMatch[3];
-                // Normalize truncated PDF suffixes: "In"→"Int", "Ad"→"AdH"
-                if (lineMatch[4] === 'In') lineType += ' Int';
-                else if (lineMatch[4] === 'Ad') lineType += ' AdH';
-                else if (lineMatch[4]) lineType += ' ' + lineMatch[4];
-                
-                const daysOffMatch = block.match(/DaysOFF>\s*(\d+)/);
-                const daysOffCount = daysOffMatch ? parseInt(daysOffMatch[1]) : 0;
-                
-                // For now, we'll use the days off count from the credit document
-                // since parsing exact dates from the bidline PDF is complex
-                lines[lineNum] = {
-                    lineNum,
-                    lineType: lineType.trim(),
-                    daysOffCount
-                };
-            }
-            
-            return { lines, startDate, endDate, allDates };
-        }
-
-        // ── Optimizer helper functions ─────────────────────────────────────
-
         // ── Period boundary helpers ────────────────────────────────────────────
 
         // Returns the first day of BP2 (second bid period).
@@ -2950,13 +2789,13 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     : 0;
 
                 // Award Days: ≤3 workdays at either end of pairing (one set, take the better)
-                // Teaching Topic: award days may not fall in company-designated exempt weeks
+                // Award days may not fall in Article 7 restricted weeks
                 const preEnd    = new Date(slideStart.getTime() - 86400000);
                 const postStart = new Date(slideEnd.getTime()   + 86400000);
                 const awardA = (daysBefore > 0 && daysBefore <= 3 &&
-                                exemptWeeksIn(trip.start, preEnd).size === 0) ? daysBefore : 0;
+                                restrictedWeeksIn(trip.start, preEnd).size === 0) ? daysBefore : 0;
                 const awardB = (daysAfter  > 0 && daysAfter  <= 3 &&
-                                exemptWeeksIn(postStart, trip.end).size === 0) ? daysAfter  : 0;
+                                restrictedWeeksIn(postStart, trip.end).size === 0) ? daysAfter  : 0;
                 awardDays = Math.max(awardDays, awardA, awardB);
             }
 
@@ -2967,24 +2806,23 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             };
         }
 
-        // CBA Art. 25.K — company-designated exempt weeks (historically 25, 26, 46, 51)
-        // Vacations may slide OUT of these weeks but NOT into them.
-        const EXEMPT_ISO_WEEKS = [25, 26, 46, 51];
+        // CBA Article 7 — restricted weeks. Vacations may slide OUT of these weeks but NOT into them.
+        // Dates are inclusive Sun–Sat ranges as published in the contract; update annually.
+        const RESTRICTED_WEEKS = [
+            { start: new Date(2026, 5, 28),  end: new Date(2026, 6, 4)  }, // Jun 28 – Jul 4, 2026
+            { start: new Date(2026, 8, 6),   end: new Date(2026, 8, 12) }, // Sep 6 – Sep 12, 2026
+            { start: new Date(2026, 10, 22), end: new Date(2026, 10, 28) }, // Nov 22 – Nov 28, 2026
+            { start: new Date(2026, 11, 20), end: new Date(2026, 11, 26) }  // Dec 20 – Dec 26, 2026
+        ];
 
-        function getISOWeek(date) {
-            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
-            const day = d.getUTCDay() || 7; // ISO: Mon=1 … Sun=7
-            d.setUTCDate(d.getUTCDate() + 4 - day); // shift to nearest Thursday
-            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
-            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
-        }
-
-        // Returns the Set of EXEMPT_ISO_WEEKS that overlap [start, end] (inclusive)
-        function exemptWeeksIn(start, end) {
+        // Returns the Set of RESTRICTED_WEEKS indices that overlap [start, end] (inclusive)
+        function restrictedWeeksIn(start, end) {
             const found = new Set();
-            for (let ms = start.getTime(); ms <= end.getTime(); ms += 86400000) {
-                const w = getISOWeek(new Date(ms));
-                if (EXEMPT_ISO_WEEKS.includes(w)) found.add(w);
+            for (let i = 0; i < RESTRICTED_WEEKS.length; i++) {
+                const w = RESTRICTED_WEEKS[i];
+                if (start.getTime() <= w.end.getTime() && w.start.getTime() <= end.getTime()) {
+                    found.add(i);
+                }
             }
             return found;
         }
@@ -2994,8 +2832,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const vacLength  = Math.round((vacEnd - vacStart) / 86400000) + 1;
             const naturalOff = datesOff.filter(d => d <= scheduleEnd).length;
 
-            // Exempt weeks the original awarded vacation already falls in — sliding OUT is OK
-            const origExemptWeeks = exemptWeeksIn(vacStart, vacEnd);
+            // Restricted weeks the original awarded vacation already falls in — sliding OUT is OK
+            const origRestrictedWeeks = restrictedWeeksIn(vacStart, vacEnd);
 
             // Anchor rule: slid block must overlap at least 1 day of the original awarded dates
             // → slideStart ∈ [vacStart-(vacLength-1), vacEnd]
@@ -3033,9 +2871,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                 if (sEnd > scheduleEnd) continue; // don't slide past schedule
 
-                // Cannot slide INTO an exempt week that the original vacation wasn't already in
-                const candExempt = exemptWeeksIn(sStart, sEnd);
-                if ([...candExempt].some(w => !origExemptWeeks.has(w))) continue;
+                // Cannot slide INTO a restricted week that the original vacation wasn't already in
+                const candRestricted = restrictedWeeksIn(sStart, sEnd);
+                if ([...candRestricted].some(w => !origRestrictedWeeks.has(w))) continue;
 
                 const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
 
@@ -3279,13 +3117,16 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         excluded++;
                         continue;
                     }
+                    if (lineDurationFilter === 'bp2' && !is60Day) {
+                        excluded++;
+                        continue;
+                    }
 
                     // Compute optimizer scores early (needed for date filter below)
-                    const is60DayLine = creditInfo.lineType.includes('60-day');
                     const _bps = bidPeriodStart || new Date();
                     const _bpYear = _bps.getFullYear();
                     const _bpMonth = _bps.getMonth();
-                    const defaultScheduleEnd = is60DayLine
+                    const defaultScheduleEnd = is60Day
                         ? new Date(_bpYear, _bpMonth + 2, 1)
                         : new Date(_bpYear, _bpMonth + 1, 1);
                     const schedEnd = bidlineInfo ? (bidlineInfo.scheduleEnd || defaultScheduleEnd) : defaultScheduleEnd;

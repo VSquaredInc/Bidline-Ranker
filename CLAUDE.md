@@ -7,7 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.2.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current version:** 1.6.9 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v12` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -21,15 +22,17 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 
 Christopher is an Atlas Air pilot building this tool for personal and eventual commercial use. He has strong domain knowledge of airline operations (bidlines, deadheads, trip pairings, base airports, crew positions) but is not a professional developer. He tests manually by checking specific known line numbers against expected values. He works in short sessions across multiple devices and needs continuity between sessions.
 
+**Node.js** is NOT installed on all machines. On machines without Node.js, Vercel must be redeployed via the Vercel dashboard, not via CLI.
+
 ---
 
 ## Required Steps After Every Editing Session
 
-1. **Bump `APP_VERSION`** in ABR.html — patch (1.2.0→1.2.1) for small fixes, minor (1.2.0→1.3.0) for meaningful feature/fix sets.
-2. **Bump `CACHE_NAME`** in service-worker.js — increment the number (e.g., `v9` → `v10`). **CRITICAL: this is what forces all existing users to download the new ABR.html.** If this is skipped, every returning visitor continues to run the old cached version indefinitely, regardless of how many times ABR.html is redeployed.
+1. **Bump `APP_VERSION`** in ABR.html — patch (1.6.9→1.6.10) for small fixes, minor (1.6.9→1.7.0) for meaningful feature/fix sets.
+2. **Bump `CACHE_NAME`** in service-worker.js — increment the number (e.g., `v12` → `v13`). **CRITICAL: this is what forces all existing users to download the new ABR.html.** If this is skipped, every returning visitor continues to run the old cached version indefinitely, regardless of how many times ABR.html is redeployed.
 3. **Create a backup** — copy ABR.html to `backups/ABR_backup_YYYYMMDD_HHMMSS.html`.
 4. **Commit and push** to GitHub — triggers GitHub Pages update automatically.
-5. **Redeploy Vercel** if `api/fetch-bid.js` changed — user runs `npx vercel --prod` from the project directory.
+5. **Redeploy Vercel** if `api/fetch-bid.js` changed — user runs `npx vercel --prod` from the project directory (or via Vercel dashboard on machines without Node.js).
 
 ---
 
@@ -64,9 +67,9 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 
 ## Portal Folder & File Detection (api/fetch-bid.js)
 
-**Folder finding:** Lists all folders in the BidPackage library, filters by folders containing both the base code (e.g., `ORD`) and aircraft type (e.g., `747`), then picks the one with the most recent date parsed from the folder name format `DD-MON YYYY` (e.g., `15-MAY 2026 ORD 747`). Fully dynamic — no hardcoded months.
+**Folder finding:** Lists all folders in the BidPackage library, filters by folders containing both the base code (e.g., `ORD`) and aircraft type (e.g., `747`), then picks the one with the most recent date parsed from the folder name format `DD-MON YYYY` (e.g., `15-MAY 2026 ORD 747`). Fully dynamic — no hardcoded months. **Fallback:** if no date can be parsed from any folder name (e.g., Atlas Air renames folders), falls back to the alphabetically last matching folder.
 
-**Bidline file match:** `n.includes('BIDLINES')` AND regex `[\s\-]+\s*{pos}(\s|\.|$)` — accepts any separator before the crew position (`747- FO`, `747 FO`, `747-FO`, etc.).
+**Bidline file match:** `n.includes('BIDLINES')` AND regex `[\s\-]+\s*{pos}(\s|\.|$)` — accepts any separator before the crew position (`747- FO`, `747 FO`, `747-FO`, etc.). Primary detection also checks for `CREW SCHEDULE FROM` in the PDF text (case-insensitive date-column regex added in v1.5.5 for all-caps PDF formats).
 
 **Credit file match:** `n.includes('LINES') && n.includes('PERIOD')`, excluding `VTO` and `PRIMARY`.
 
@@ -81,6 +84,12 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 - **`defaultScheduleEnd`** (ranking logic) — derived from `bidPeriodStart`: BP1 lines = `bidPeriodStart + 1 month`, 60-day lines = `bidPeriodStart + 2 months`. Never hardcoded.
 - **`baseYear`** fallback — `new Date().getFullYear()` in both parsers.
 
+### Credit PDF Parsing
+
+`parseCreditValue()` reads the 2026 column-per-line format. **Guarantee row:** reads from the `CREDIT ART33` row ("SUM GREATER OF CREDIT OR RIG w ART33 AND ULR") — NOT `SUM OF CREDITS`. Strip the `CREDIT ART33` label prefix before extracting numbers to avoid the "33" in the label being captured as the first value. For 60-day lines, credit1 (single month) and credit2 (two-month cumulative) are averaged in the merge step.
+
+---
+
 ## Line Types (8 total, confirmed across all PDFs)
 
 1. Primary Int
@@ -93,6 +102,81 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 8. Reserve 60-day AdH ← PDF shows "Reserve 60-day Ad" (truncated)
 
 Reserve lines do NOT appear in credit PDFs. Fallback: guarantee=0, daysOff from bidline `DaysOFF>` count.
+
+---
+
+## Scoring Formula
+
+**Effective value:** `guarantee + ((daysOff − avgDaysOff) × dayOffValue)`
+
+Where:
+- `avgDaysOff` is the average days off across all **candidate** (filtered) lines — not the full set
+- `dayOffValue` is set by the **Ranking Priority** slider (3-position discrete):
+  - **Guarantee** → 0 (days off ignored, rank purely by pay)
+  - **Balanced** → 4.85 hrs/day
+  - **Days Off** → 10.85 hrs/day
+
+**Contract minimum:** Any line with guarantee < 64 hrs floors at 64 (covers Reserve lines which have no credit PDF data).
+
+**Airport scoring:** Range-based log₂ scaling — `(pct/100) × valueRange × log₂(1 + matchCount)`. Symmetric: equal whitelist/blacklist match counts cancel exactly. Operates as an additive adjustment on top of effective value.
+
+**60-day lines:** `(bp1Score + bp2Score) / 2` — normalized to a per-period basis for fair comparison with 30-day lines. BP2 scoring uses `nativeDaysOffBP2` as fallback when no credit file is uploaded.
+
+---
+
+## Conflict Optimizer
+
+Two modes accessible via the results table: **Vacation Slide** and **Training Overlap**.
+
+### Vacation Slide Mode
+Computes the optimal legal vacation slide for each line given a conflict period (training or scheduling conflict). Implements CBA Article 7 rules (see below). Shows: conflict days covered, effective days off gained, score, slide dates.
+
+**Trips display:** "Before" section (strikethrough) → "After" section. Training dates shown in After section labeled `tng` (e.g., `tng Jul 14–17`).
+
+### Training Overlap Mode
+Scores how well training dates land on already-scheduled workdays:
+- Green ✓ = all training on workdays
+- Orange ⚠ = partial overlap
+- Red ✗ = all training on off-days
+
+`effDaysOff = nativeDaysOff + overlapDays − offDaysInTraining` (training on off-days is penalized).
+
+### Cross-Period Trip Attribution
+`evalVacContribForPeriod()` accepts period bounds and clips trips at the BP1/BP2 boundary. Trips starting in BP1 but ending in BP2 are no longer attributed entirely to BP1. Training scoring uses `lineTrips` (all trips) so cross-boundary workdays are correctly evaluated.
+
+---
+
+## CBA Vacation Slide Rules (Article 7)
+
+Implemented from Atlas Article 7.pdf (governing source):
+
+| Article | Rule |
+|---|---|
+| 7.D.2.b | Anchor rule — at least one original vacation day must remain in place |
+| 7.D.2.c | Partial conflict cap — slide only until the first **full** conflict day, then stop |
+| 7.D.2.d | Partially conflicted vacation must abut Days-Off |
+| 7.D.4 | Fully conflicted vacation may slide in either direction (with anchor) |
+| 7.D.5 | Exempt weeks — company may designate up to 4 (max 1/month); sliding OUT is explicitly permitted |
+| 7.D.7 | Award Days — ≤3 workdays at ONE edge of a trip pairing; only one set per vacation period |
+
+**Source verification:** Atlas Article 25.pdf does NOT mention exempt weeks (25.K covers vacation bid period mechanics only). The IBT Teaching Topic (Vacation Slide.pdf, May 2024) is a user-friendly summary and source for the exempt weeks list and Award Days/exempt weeks intersection — but is NOT the governing CBA.
+
+### Restricted Weeks
+
+`RESTRICTED_WEEKS` — array of `{ start, end }` date objects representing the actual calendar weeks Atlas Air designates as restricted for the current bid year. Update annually when Atlas Air publishes the exempt weeks in bid materials.
+
+**Current values (2026):**
+- Jun 28 – Jul 4
+- Sep 6 – Sep 12
+- Nov 22 – Nov 28
+- Dec 20 – Dec 26
+
+**Implementation:**
+- `restrictedWeeksIn(start, end)` — returns Set of RESTRICTED_WEEKS indices that overlap a date range (date-range overlap check, not ISO week math)
+- Slide positions that would enter a restricted week the pilot was NOT already in are skipped
+- `origRestrictedWeeks` computed from original `vacStart`/`vacEnd` — sliding OUT of a restricted week is allowed
+
+**Award Days + restricted weeks:** `awardA`/`awardB` are zeroed when the pre/post-vacation workdays fall inside a restricted week. Note: 7.D.7 is silent on this — this rule comes from the IBT Teaching Topic only (conservative implementation).
 
 ---
 
@@ -133,8 +217,16 @@ Content is real only if it matches: airport pattern (3-letter, not in excludeCod
 - Two upload sources: "Fetch from Portal" tab and "Upload Manually" tab
 - Three file slots: Bidline Schedule (required), Line Credit Month 1 (optional), Line Credit Month 2 (optional)
 - Filters: Line Type checkboxes (Primary/Secondary/Reserve), Line Duration, Dates Desired Off (date ranges), Airport Preferences (whitelist/blacklist, absolute or % adjustment)
-- Results table: 10 fixed-width columns
+- Results table: 10 fixed-width columns; Conflict Optimizer columns added when optimizer mode is active
 - Footer: developer name, email, V² branding, version number
+
+---
+
+## Known Open Items
+
+- **ISO week accuracy:** July 4, 2026 is ISO week 27 — verify published Jun/Jul 2026 bid materials confirm which weeks Atlas Air designated as exempt for this cycle. Update `EXEMPT_ISO_WEEKS` if needed.
+- **ANC CA pilot confirmation:** The vacation slide fix (partial conflict cap, v1.6.4+) has not yet been confirmed working by the ANC CA pilot who reported the original bug.
+- **Debug logging:** `console.log` statements gated on `lineNum==='4156'` remain in ABR.html from v1.5.7/v1.5.8. Remove at the start of the next coding session.
 
 ---
 
