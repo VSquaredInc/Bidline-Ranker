@@ -161,7 +161,7 @@ async function listFiles(username, password, aircraft, base, crewPosition) {
         // Bidline schedule for the pilot's crew position.
         // Match any separator before the position: "747- FO", "747 FO", "747-FO", "747 - FO"
         const bidlinePositionMatch = new RegExp(`[\\s\\-]+\\s*${pos}(\\s|\\.|$)`).test(n);
-        if (n.includes('BIDLINES') && bidlinePositionMatch) {
+        if (n.includes('BIDLINE') && bidlinePositionMatch) {
             matched.push({ name: f.Name, url: f.ServerRelativeUrl, role: 'bidline' });
             continue;
         }
