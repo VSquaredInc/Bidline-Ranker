@@ -69,7 +69,7 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 
 **Folder finding:** Lists all folders in the BidPackage library, filters by folders containing both the base code (e.g., `ORD`) and aircraft type (e.g., `747`), then picks the one with the most recent date parsed from the folder name format `DD-MON YYYY` (e.g., `15-MAY 2026 ORD 747`). Fully dynamic — no hardcoded months. **Fallback:** if no date can be parsed from any folder name (e.g., Atlas Air renames folders), falls back to the alphabetically last matching folder.
 
-**Bidline file match:** `n.includes('BIDLINES')` AND regex `[\s\-]+\s*{pos}(\s|\.|$)` — accepts any separator before the crew position (`747- FO`, `747 FO`, `747-FO`, etc.). Primary detection also checks for `CREW SCHEDULE FROM` in the PDF text (case-insensitive date-column regex added in v1.5.5 for all-caps PDF formats).
+**Bidline file match:** `n.includes('BIDLINE')` AND regex `[\s\-]+\s*{pos}(\s|\.|$)` — accepts both singular (`BIDLINE`, Jul 2026 onward) and plural (`BIDLINES`, pre-Jul 2026) forms, with any separator before the crew position (`747- FO`, `747 FO`, `747-FO`, etc.). Atlas switched to the singular filename starting with the Jul 2026 posting. Primary detection also checks for `CREW SCHEDULE FROM` in the PDF text (case-insensitive date-column regex added in v1.5.5 for all-caps PDF formats).
 
 **Credit file match:** `n.includes('LINES') && n.includes('PERIOD')`, excluding `VTO` and `PRIMARY`.
 
