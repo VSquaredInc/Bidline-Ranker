@@ -1,6 +1,6 @@
 [
   {
-    "savedAt": "2026-06-18T07:32:33.850Z",
+    "savedAt": "2026-06-18T08:03:17.400Z",
     "appVersion": "1.7.1",
     "base": "LAX",
     "aircraft": "744",
@@ -42,7 +42,8 @@
       85.6
     ],
     "primaryCount": 58,
-    "primaryFlooredCount": 4,
-    "primaryFlooredPct": 7
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 7
   }
 ]

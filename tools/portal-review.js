@@ -114,7 +114,8 @@ async function reviewOne(parsers, appVersion, label, files, outDir, report) {
   const warns = findings.filter(f => f.level === 'warn').length;
   report.combo(label, errs ? 'err' : (warns ? 'warn' : 'ok'),
     `${fp.base || '?'} ${fp.aircraft || '?'} ${fp.position || '?'} — ${errs} err / ${warns} warn` +
-    (fp.primaryFlooredPct != null ? `, ${fp.primaryFlooredPct}% primaries floored` : ''));
+    (fp.primaryUnreadPct != null ? `, ${fp.primaryUnreadPct}% primaries unread` : '') +
+    (fp.primaryAtFloorPct ? `, ${fp.primaryAtFloorPct}% at 64 floor` : ''));
   return { error: errs > 0, fp, changeNotes };
 }
 

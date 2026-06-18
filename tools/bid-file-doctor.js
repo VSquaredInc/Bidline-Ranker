@@ -232,19 +232,25 @@ async function analyzeSchedule(bidlineDoc, creditDocs, parsers, appVersion) {
   if (bidlineList.length && creditData.length) {
     const primaries = bidlineList.filter(l => /^Primary/.test(l.lineType));
     const mergedVals = [];
-    let noCreditMatch = 0, primaryFloored = 0;
+    let noCreditMatch = 0, primaryUnread = 0, primaryAtFloor = 0;
     for (const l of bidlineList) {
       const g = mergedGuarantee(l.lineNum, c1, c2);
       if (g == null) noCreditMatch++; else mergedVals.push(g);
     }
+    // The real failure signature is a guarantee that wasn't read at all
+    // (null/0) — what the v1.7.1 bug produced. A genuine 64 (credit below the
+    // contract minimum, common on short-haul / AdH lines) is NOT a failure, so
+    // it must not be counted as one. Track the two separately.
     for (const l of primaries) {
       const g = mergedGuarantee(l.lineNum, c1, c2);
-      if (g == null || g <= CONTRACT_MIN + 0.01) primaryFloored++;
+      if (g == null || g === 0) primaryUnread++;
+      else if (g <= CONTRACT_MIN + 0.01) primaryAtFloor++;
     }
     fp.guaranteeRange = range(mergedVals.filter(v => v > 0));
     fp.primaryCount = primaries.length;
-    fp.primaryFlooredCount = primaryFloored;
-    fp.primaryFlooredPct = primaries.length ? Math.round((primaryFloored / primaries.length) * 100) : 0;
+    fp.primaryUnreadCount = primaryUnread;
+    fp.primaryUnreadPct = primaries.length ? Math.round((primaryUnread / primaries.length) * 100) : 0;
+    fp.primaryAtFloorPct = primaries.length ? Math.round((primaryAtFloor / primaries.length) * 100) : 0;
 
     if (noCreditMatch) {
       const pct = Math.round((noCreditMatch / bidlineList.length) * 100);
@@ -252,13 +258,14 @@ async function analyzeSchedule(bidlineDoc, creditDocs, parsers, appVersion) {
         'Lines present in the schedule but missing from the credit parse. Either a line-number dropped in the credit parser, or the paired credit file does not cover this position/base.');
     }
     if (primaries.length >= 5) {
-      if (fp.primaryFlooredPct >= 60)
-        err('Scoring', `${fp.primaryFlooredPct}% of Primary lines floored to ${CONTRACT_MIN} hrs — guarantees are not being read`,
-          'The "everything is 64" symptom. Primary lines should almost always have a real guarantee. Review credit guarantee extraction (and confirm the right credit file was paired).');
-      else if (fp.primaryFlooredPct >= 20)
-        warn('Scoring', `${fp.primaryFlooredPct}% of Primary lines floored to ${CONTRACT_MIN} hrs`, 'Higher than usual; spot-check a few primary lines against the credit PDF.');
+      const floorNote = fp.primaryAtFloorPct ? ` (${fp.primaryAtFloorPct}% legitimately at the ${CONTRACT_MIN} hr floor)` : '';
+      if (fp.primaryUnreadPct >= 50)
+        err('Scoring', `${fp.primaryUnreadPct}% of Primary lines have NO guarantee value (0/missing) — guarantees are not being read`,
+          'The "everything is 64" symptom. A real 64 (credit below the contract minimum) is fine; this counts only 0/missing values. Review credit guarantee extraction and confirm the right credit file was paired.');
+      else if (fp.primaryUnreadPct >= 20)
+        warn('Scoring', `${fp.primaryUnreadPct}% of Primary lines have no guarantee value (0/missing)`, 'Higher than usual; spot-check a few primary lines against the credit PDF.');
       else
-        ok('Scoring', `Primary guarantees look healthy (${fp.primaryFlooredPct}% floored; range ${fp.guaranteeRange ? fp.guaranteeRange.join('-') : 'n/a'})`);
+        ok('Scoring', `Primary guarantees read OK (${primaries.length - primaryUnread}/${primaries.length}${floorNote}; range ${fp.guaranteeRange ? fp.guaranteeRange.join('-') : 'n/a'})`);
     }
     if (fp.guaranteeRange) {
       const high = mergedVals.filter(v => v > GUARANTEE_HIGH).length;

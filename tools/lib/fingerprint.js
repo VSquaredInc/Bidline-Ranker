@@ -69,11 +69,12 @@ function diff(prev, cur) {
   if (added.length) changes.push(`new line type(s): ${added.join(', ')}`);
   if (gone.length) changes.push(`line type(s) no longer present: ${gone.join(', ')}`);
 
-  // Big swings in the floor rate are the strongest "parser regressed" signal.
-  if (prev.primaryFlooredPct != null && cur.primaryFlooredPct != null) {
-    const delta = cur.primaryFlooredPct - prev.primaryFlooredPct;
+  // A jump in the "guarantee not read" rate is the strongest "parser regressed"
+  // signal (0/missing guarantees, not legitimate contract-minimum 64s).
+  if (prev.primaryUnreadPct != null && cur.primaryUnreadPct != null) {
+    const delta = cur.primaryUnreadPct - prev.primaryUnreadPct;
     if (Math.abs(delta) >= 15) {
-      changes.push(`primary lines floored to 64: ${prev.primaryFlooredPct}% -> ${cur.primaryFlooredPct}% (${delta > 0 ? '+' : ''}${delta}%)`);
+      changes.push(`primary lines with no guarantee read: ${prev.primaryUnreadPct}% -> ${cur.primaryUnreadPct}% (${delta > 0 ? '+' : ''}${delta}%)`);
     }
   }
   // Guarantee range shifts can indicate column mis-mapping.
