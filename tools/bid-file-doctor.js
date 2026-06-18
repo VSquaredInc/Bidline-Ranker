@@ -7,6 +7,10 @@
 // from ABR.html (so it catches actual breakage, not a stale re-implementation),
 // checks a battery of invariants, and diffs against last month's fingerprint.
 //
+// Handles all Atlas fleets (747, 767, 777). A folder may hold one schedule or
+// several (any base / aircraft / position); each bidline is analysed on its own
+// and paired only with the credit files for its aircraft.
+//
 // Usage:
 //   cd tools
 //   npm install            # once, to fetch pdfjs-dist
@@ -17,12 +21,14 @@
 const fs = require('fs');
 const path = require('path');
 
-// Silence pdfjs's harmless "Cannot polyfill DOMMatrix/Path2D" canvas warnings
-// (we only extract text, never render). These fire during pdfjs's require via
-// console.log, so the filter must be installed before that require runs.
+// Silence pdfjs's harmless console noise (canvas polyfill warnings at require
+// time, plus per-font "TT: undefined function" warnings). We only extract text.
 for (const m of ['log', 'warn']) {
   const orig = console[m].bind(console);
-  console[m] = (...a) => { if (/Cannot polyfill|module 'canvas'/i.test(String(a[0] || ''))) return; orig(...a); };
+  console[m] = (...a) => {
+    if (/Cannot polyfill|module 'canvas'|TT: undefined function/i.test(String(a[0] || ''))) return;
+    orig(...a);
+  };
 }
 
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -50,18 +56,21 @@ const CONTRACT_MIN = 64;        // hours; app floors guarantees below this
 const GUARANTEE_HIGH = 100;     // hours; above this is worth a sanity check
 const DAYSOFF_MIN = 8, DAYSOFF_MAX = 22;
 
-// ── findings collector ───────────────────────────────────────────────────────
-const findings = [];
-function add(level, section, msg, hint) { findings.push({ level, section, msg, hint }); }
-const ok = (s, m) => add('ok', s, m);
-const warn = (s, m, h) => add('warn', s, m, h);
-const err = (s, m, h) => add('err', s, m, h);
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 function listPdfs(dir) {
   return fs.readdirSync(dir)
     .filter(f => f.toLowerCase().endsWith('.pdf'))
     .map(f => path.join(dir, f));
+}
+
+// Normalize a header aircraft code to its credit-file family token.
+// Bidline headers can read 744 (747-400); credit files are named "747 Lines".
+function aircraftFamily(code) {
+  const d = String(code || '').replace(/\D/g, '');
+  if (d.startsWith('74')) return '747';
+  if (d.startsWith('76')) return '767';
+  if (d.startsWith('77')) return '777';
+  return d.slice(0, 3) || null;
 }
 
 function bidlineFilenameOk(name, pos) {
@@ -87,134 +96,95 @@ function range(nums) {
   return [Math.min(...nums), Math.max(...nums)].map(n => Math.round(n * 100) / 100);
 }
 
-// ── main ─────────────────────────────────────────────────────────────────────
-async function main() {
-  const folderArg = process.argv[2];
-  if (!folderArg) {
-    console.log('Usage: node bid-file-doctor.js <folder-with-month-PDFs>\n');
-    const candidates = fs.readdirSync(REPO_ROOT, { withFileTypes: true })
-      .filter(d => d.isDirectory() && !d.name.startsWith('.') && d.name !== 'tools' && d.name !== 'backups' && d.name !== 'node_modules')
-      .filter(d => { try { return listPdfs(path.join(REPO_ROOT, d.name)).length > 0; } catch { return false; } })
-      .map(d => d.name);
-    if (candidates.length) console.log('Folders with PDFs you could check:\n  ' + candidates.join('\n  '));
-    process.exit(2);
-  }
-  const folder = path.resolve(folderArg);
-  if (!fs.existsSync(folder)) { console.error(`Folder not found: ${folder}`); process.exit(2); }
+function periodScore(text) {
+  const m = text.match(/([A-Za-z]{3})(\d{2})-([A-Za-z]{3})(\d{2})/);
+  if (!m) return 0;
+  const MONTHS = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
+  const endMon = MONTHS[m[3].toUpperCase()] || 0;
+  const endYr = parseInt(m[4]) + 2000;
+  return endYr * 12 + endMon;
+}
 
-  const appVersion = readAppVersion(ABR_HTML);
-  const parsers = loadAbrParsers(ABR_HTML, pdfjsLib);
+// ── per-schedule analysis ─────────────────────────────────────────────────────
+// Analyses one bidline schedule + its paired credit files. Returns the findings
+// list and the structural fingerprint. Self-contained (no shared mutable state)
+// so a folder with several schedules produces an independent report each.
+async function analyzeSchedule(bidlineDoc, creditDocs, parsers, appVersion) {
+  const findings = [];
+  const ok = (s, m) => findings.push({ level: 'ok', section: s, msg: m });
+  const warn = (s, m, h) => findings.push({ level: 'warn', section: s, msg: m, hint: h });
+  const err = (s, m, h) => findings.push({ level: 'err', section: s, msg: m, hint: h });
 
-  const pdfs = listPdfs(folder);
-  if (!pdfs.length) { console.error(`No PDFs in ${folder}`); process.exit(2); }
+  const fp = { savedAt: new Date().toISOString(), appVersion, base: null, aircraft: null, position: null, period: null };
 
-  // ── classify every PDF using the app's own detector ──────────────────────
-  const classified = [];
-  for (const p of pdfs) {
-    const file = fileFromPath(p);
-    let text = '';
-    try { text = await parsers.extractTextFromPDF(file); }
-    catch (e) { err('Files', `Could not read ${path.basename(p)}: ${e.message}`); continue; }
-    const type = parsers.detectFileType(text);
-    classified.push({ path: p, name: path.basename(p), file, text, type });
-  }
-
-  const bidlineDocs = classified.filter(c => c.type === 'bidline');
-  const creditDocs = classified.filter(c => c.type === 'credit');
-  const unknownDocs = classified.filter(c => c.type === 'unknown');
-
-  for (const u of unknownDocs) {
-    err('Files', `"${u.name}" was not recognized as bidline or credit`,
-      'detectFileType() did not match — the PDF title/header format may have changed. Review detectFileType() in ABR.html.');
-  }
-  if (!bidlineDocs.length) {
-    err('Files', 'No bidline schedule PDF found in this folder',
-      'The schedule PDF did not match detectFileType()==="bidline". Check the CREW SCHEDULE FROM header / "<AC> <POS>" header pattern.');
-  }
-  if (bidlineDocs.length > 1) warn('Files', `${bidlineDocs.length} bidline PDFs found; using the first ("${bidlineDocs[0].name}")`);
-
-  const fp = {
-    savedAt: new Date().toISOString(),
-    appVersion,
-    base: null, aircraft: null, position: null, period: null,
-  };
-
-  // ── bidline checks (real parseBidlineWithPositions) ──────────────────────
+  // bidline
+  parsers.resetBidPeriodStart();
   let bidlineLines = {}, meta = {};
-  if (bidlineDocs.length) {
-    const doc = bidlineDocs[0];
-    parsers.resetBidPeriodStart();
-    let res;
-    try { res = await parsers.parseBidlineWithPositions(doc.file); }
-    catch (e) { err('Bidline', `Parser threw: ${e.message}`, 'parseBidlineWithPositions() failed outright — a structural assumption broke.'); }
-    if (res) {
-      bidlineLines = res.lines; meta = res.meta || {};
-      const count = Object.keys(bidlineLines).length;
-      fp.base = meta.baseAirport || null;
-      fp.aircraft = meta.aircraftType || null;
-      fp.position = meta.crewPosition || null;
-      fp.bidlineLineCount = count;
+  let res;
+  try { res = await parsers.parseBidlineWithPositions(bidlineDoc.file); }
+  catch (e) { err('Bidline', `Parser threw: ${e.message}`, 'parseBidlineWithPositions() failed outright — a structural assumption broke.'); }
+  if (res) { bidlineLines = res.lines; meta = res.meta || {}; }
 
-      if (count === 0) err('Bidline', 'Parsed 0 lines from the schedule',
-        'Row/column detection failed — the schedule table layout likely changed (parseBidlineWithPositions).');
-      else ok('Bidline', `${count} lines parsed`);
+  const count = Object.keys(bidlineLines).length;
+  fp.base = meta.baseAirport || null;
+  fp.aircraft = meta.aircraftType || null;
+  fp.position = meta.crewPosition || null;
+  fp.bidlineLineCount = count;
 
-      // header / meta
-      const bps = parsers.getBidPeriodStart();
-      fp.headerDateOk = !!bps;
-      if (!bps) err('Bidline', 'CREW SCHEDULE FROM header date not parsed — date defaults will be used',
-        'The header regex in parseBidlineWithPositions did not match. All date math (bid period, schedule end) falls back to today. See CLAUDE.md "Bid Cycle Rules".');
-      else ok('Bidline', `Bid period start: ${bps.toISOString().slice(0, 10)}`);
+  if (count === 0) err('Bidline', 'Parsed 0 lines from the schedule',
+    'Row/column detection failed — the schedule table layout likely changed (parseBidlineWithPositions).');
+  else ok('Bidline', `${count} lines parsed`);
 
-      if (!meta.aircraftType || !meta.crewPosition)
-        warn('Bidline', `Header fields incomplete (base=${meta.baseAirport || '?'}, ac=${meta.aircraftType || '?'}, pos=${meta.crewPosition || '?'})`,
-          'The "<BASE> <AC> <POS>" header pattern did not fully match — check the header regex.');
-      else ok('Bidline', `${meta.baseAirport} ${meta.aircraftType} ${meta.crewPosition}`);
+  const bps = parsers.getBidPeriodStart();
+  fp.headerDateOk = !!bps;
+  if (!bps) err('Bidline', 'CREW SCHEDULE FROM header date not parsed — date defaults will be used',
+    'The header regex in parseBidlineWithPositions did not match. All date math falls back to today. See CLAUDE.md "Bid Cycle Rules".');
+  else ok('Bidline', `Bid period start: ${bps.toISOString().slice(0, 10)}`);
 
-      // line types
-      const typeHist = {};
-      const unknownTypes = {};
-      let zeroTrips = 0;
-      const daysOffVals = [];
-      for (const ln of Object.values(bidlineLines)) {
-        typeHist[ln.lineType] = (typeHist[ln.lineType] || 0) + 1;
-        if (!KNOWN_TYPES.has(ln.lineType)) unknownTypes[ln.lineType] = (unknownTypes[ln.lineType] || 0) + 1;
-        if (!ln.trips || ln.trips.length === 0) zeroTrips++;
-        if (typeof ln.daysOffCount === 'number') daysOffVals.push(ln.daysOffCount);
-      }
-      fp.lineTypeHistogram = typeHist;
-      fp.daysOffRange = range(daysOffVals);
+  if (!meta.aircraftType || !meta.crewPosition)
+    warn('Bidline', `Header fields incomplete (base=${meta.baseAirport || '?'}, ac=${meta.aircraftType || '?'}, pos=${meta.crewPosition || '?'})`,
+      'The "<BASE> <AC> <POS>" header pattern did not fully match — check the header regex.');
+  else ok('Bidline', `${meta.baseAirport} ${meta.aircraftType} ${meta.crewPosition}`);
 
-      const unknownTotal = Object.values(unknownTypes).reduce((a, b) => a + b, 0);
-      if (unknownTotal === 0) ok('Bidline', `Line types all known (${Object.keys(typeHist).length} distinct)`);
-      else {
-        const detail = Object.entries(unknownTypes).map(([t, c]) => `"${t}"×${c}`).join(', ');
-        const lvl = unknownTotal > count * 0.3 ? err : warn;
-        lvl('Bidline', `${unknownTotal} line(s) have unrecognized type: ${detail}`,
-          'New/renamed line-type label. Add it to the type lists in ABR.html (parseBidline + parseCredit) and KNOWN_TYPES here, and to CLAUDE.md "Line Types".');
-      }
+  // line types / trips / days off
+  const typeHist = {}, unknownTypes = {};
+  let zeroTrips = 0;
+  const daysOffVals = [];
+  for (const ln of Object.values(bidlineLines)) {
+    typeHist[ln.lineType] = (typeHist[ln.lineType] || 0) + 1;
+    if (!KNOWN_TYPES.has(ln.lineType)) unknownTypes[ln.lineType] = (unknownTypes[ln.lineType] || 0) + 1;
+    if (!ln.trips || ln.trips.length === 0) zeroTrips++;
+    if (typeof ln.daysOffCount === 'number') daysOffVals.push(ln.daysOffCount);
+  }
+  fp.lineTypeHistogram = typeHist;
+  fp.daysOffRange = range(daysOffVals);
 
-      if (daysOffVals.length) {
-        const outliers = daysOffVals.filter(d => d < DAYSOFF_MIN || d > DAYSOFF_MAX).length;
-        if (outliers) warn('Bidline', `${outliers} line(s) have days-off outside ${DAYSOFF_MIN}-${DAYSOFF_MAX} (range ${fp.daysOffRange.join('-')})`,
-          'Off-day (X marker) detection may be mis-counting. See CLAUDE.md "Off-Day Detection".');
-        else ok('Bidline', `Days-off per line within ${fp.daysOffRange.join('-')}`);
-      }
-      if (zeroTrips) warn('Bidline', `${zeroTrips} line(s) parsed with 0 trips`,
-        'Trip (working-block) detection may have failed for these lines.');
+  const unknownTotal = Object.values(unknownTypes).reduce((a, b) => a + b, 0);
+  if (count > 0 && unknownTotal === 0) ok('Bidline', `Line types all known (${Object.keys(typeHist).length} distinct)`);
+  else if (unknownTotal) {
+    const detail = Object.entries(unknownTypes).map(([t, c]) => `"${t}"x${c}`).join(', ');
+    const report = unknownTotal > count * 0.3 ? err : warn;
+    report('Bidline', `${unknownTotal} line(s) have unrecognized type: ${detail}`,
+      'New/renamed line-type label. Add it to the type lists in ABR.html and to KNOWN_TYPES here, and to CLAUDE.md "Line Types".');
+  }
+  if (daysOffVals.length) {
+    const outliers = daysOffVals.filter(d => d < DAYSOFF_MIN || d > DAYSOFF_MAX).length;
+    if (outliers) warn('Bidline', `${outliers} line(s) have days-off outside ${DAYSOFF_MIN}-${DAYSOFF_MAX} (range ${fp.daysOffRange.join('-')})`,
+      'Off-day (X marker) detection may be mis-counting. See CLAUDE.md "Off-Day Detection".');
+    else ok('Bidline', `Days-off per line within ${fp.daysOffRange.join('-')}`);
+  }
+  if (zeroTrips) warn('Bidline', `${zeroTrips} line(s) parsed with 0 trips`, 'Trip (working-block) detection may have failed for these lines.');
 
-      // filename vs portal
-      if (fp.position) {
-        fp.filenameBidlineOk = bidlineFilenameOk(doc.name, fp.position);
-        if (fp.filenameBidlineOk) ok('Portal', `Bidline filename matches portal pattern for ${fp.position}`);
-        else err('Portal', `Bidline filename "${doc.name}" would NOT be found by the portal fetch`,
-          'api/fetch-bid.js requires the name to contain BIDLINE and a separator before the position. Update that matcher (and CLAUDE.md "Portal Folder & File Detection"). Remember to redeploy Vercel.');
-      }
-    }
+  // bidline filename vs portal
+  if (fp.position) {
+    fp.filenameBidlineOk = bidlineFilenameOk(bidlineDoc.name, fp.position);
+    if (fp.filenameBidlineOk) ok('Portal', `Bidline filename matches portal pattern for ${fp.position}`);
+    else err('Portal', `Bidline filename "${bidlineDoc.name}" would NOT be found by the portal fetch`,
+      'api/fetch-bid.js requires the name to contain BIDLINE and a separator before the position. Update that matcher (and CLAUDE.md). Redeploy Vercel.');
   }
 
-  // ── credit checks (real parseCreditFile) ─────────────────────────────────
-  const creditData = []; // { name, text, data, format }
+  // credit
+  const creditData = [];
   for (const doc of creditDocs) {
     let data = {};
     try { data = await parsers.parseCreditFile(doc.file, doc.text); }
@@ -222,20 +192,18 @@ async function main() {
     const format = doc.text.includes('SUM OF CREDITS') ? 'geometry-2026' : 'legacy';
     creditData.push({ name: doc.name, text: doc.text, data, format });
   }
-  // order by period end so [0]=single month (credit1), [1]=cumulative (credit2)
-  creditData.sort((a, b) => periodScore(a.text, parsers) - periodScore(b.text, parsers));
+  creditData.sort((a, b) => periodScore(a.text) - periodScore(b.text));
   const c1 = creditData[0] && creditData[0].data;
   const c2 = creditData[1] && creditData[1].data;
 
   fp.creditFormat = creditData[0] ? creditData[0].format : 'none';
-  fp.creditFiles = creditData.map(cd => {
-    const vals = Object.values(cd.data);
-    const nonZero = vals.filter(v => v.guarantee > 0).length;
-    return { name: cd.name, lineCount: vals.length, guaranteeNonZero: nonZero };
-  });
+  fp.creditFiles = creditData.map(cd => ({ name: cd.name, lineCount: Object.keys(cd.data).length, guaranteeNonZero: Object.values(cd.data).filter(v => v.guarantee > 0).length }));
 
-  if (!creditData.length) warn('Credit', 'No credit (LINES…PERIOD) PDFs found — guarantees will all fall back to the 64 hr minimum',
-    'If credit files exist, their names may have changed (need LINES + PERIOD, not VTO/PRIMARY). See creditFilenameOk / api/fetch-bid.js.');
+  if (!creditData.length) {
+    const fam = aircraftFamily(meta.aircraftType);
+    warn('Credit', `No ${fam || ''} credit (LINES…PERIOD) PDFs paired with this schedule — guarantees fall back to the ${CONTRACT_MIN} hr minimum`,
+      'Either no credit file for this aircraft is in the folder, or the credit filename changed (needs LINES + PERIOD, not VTO/PRIMARY).');
+  }
 
   let creditLandmarkOk = true;
   for (const cd of creditData) {
@@ -247,7 +215,7 @@ async function main() {
       creditLandmarkOk = false;
     } else if (nonZero === 0) {
       err('Credit', `"${cd.name}" parsed ${vals.length} lines but EVERY guarantee is 0 (${cd.format})`,
-        'Guarantee row not found — the credit table format changed. This is the exact failure fixed in v1.7.1; review the ART33 guarantee-row detection in parseCreditByGeometry.');
+        'Guarantee row not found — credit table format changed. This is the failure fixed in v1.7.1; review ART33 guarantee-row detection in parseCreditByGeometry.');
       creditLandmarkOk = false;
     } else {
       ok('Credit', `"${cd.name}": ${vals.length} lines, ${nonZero} real guarantees (${cd.format})`);
@@ -257,18 +225,17 @@ async function main() {
         'Needs LINES + PERIOD and must not contain VTO/PRIMARY. Update api/fetch-bid.js if Atlas renamed these.');
   }
   fp.creditLandmarkOk = creditLandmarkOk;
-  fp.filenameCreditOk = creditData.every(cd => creditFilenameOk(cd.name));
+  fp.filenameCreditOk = creditData.length ? creditData.every(cd => creditFilenameOk(cd.name)) : null;
 
-  // ── the headline metric: would the user just see a wall of 64s? ──────────
+  // headline scoring: would the user see a wall of 64s?
   const bidlineList = Object.values(bidlineLines);
   if (bidlineList.length && creditData.length) {
     const primaries = bidlineList.filter(l => /^Primary/.test(l.lineType));
     const mergedVals = [];
-    let primaryFloored = 0, noCreditMatch = 0;
+    let noCreditMatch = 0, primaryFloored = 0;
     for (const l of bidlineList) {
       const g = mergedGuarantee(l.lineNum, c1, c2);
-      if (g == null) noCreditMatch++;
-      else mergedVals.push(g);
+      if (g == null) noCreditMatch++; else mergedVals.push(g);
     }
     for (const l of primaries) {
       const g = mergedGuarantee(l.lineNum, c1, c2);
@@ -281,16 +248,15 @@ async function main() {
 
     if (noCreditMatch) {
       const pct = Math.round((noCreditMatch / bidlineList.length) * 100);
-      (pct > 25 ? err : warn)('Scoring', `${noCreditMatch} of ${bidlineList.length} bidline lines (${pct}%) have no matching credit entry — they floor to 64`,
-        'Lines present in the schedule but missing from the credit parse. Either a line-number dropped in parseCreditByGeometry, or the credit file does not cover this position/base.');
+      (pct > 25 ? err : warn)('Scoring', `${noCreditMatch} of ${bidlineList.length} bidline lines (${pct}%) have no matching credit entry — they floor to ${CONTRACT_MIN}`,
+        'Lines present in the schedule but missing from the credit parse. Either a line-number dropped in the credit parser, or the paired credit file does not cover this position/base.');
     }
     if (primaries.length >= 5) {
       if (fp.primaryFlooredPct >= 60)
         err('Scoring', `${fp.primaryFlooredPct}% of Primary lines floored to ${CONTRACT_MIN} hrs — guarantees are not being read`,
-          'This is the "everything is 64" symptom. Primary lines should almost always have a real guarantee. Review credit guarantee extraction.');
+          'The "everything is 64" symptom. Primary lines should almost always have a real guarantee. Review credit guarantee extraction (and confirm the right credit file was paired).');
       else if (fp.primaryFlooredPct >= 20)
-        warn('Scoring', `${fp.primaryFlooredPct}% of Primary lines floored to ${CONTRACT_MIN} hrs`,
-          'Higher than usual; spot-check a few primary lines against the credit PDF.');
+        warn('Scoring', `${fp.primaryFlooredPct}% of Primary lines floored to ${CONTRACT_MIN} hrs`, 'Higher than usual; spot-check a few primary lines against the credit PDF.');
       else
         ok('Scoring', `Primary guarantees look healthy (${fp.primaryFlooredPct}% floored; range ${fp.guaranteeRange ? fp.guaranteeRange.join('-') : 'n/a'})`);
     }
@@ -300,8 +266,6 @@ async function main() {
       if (high) warn('Scoring', `${high} line(s) have guarantee > ${GUARANTEE_HIGH} hrs (max ${fp.guaranteeRange[1]})`, 'Verify these are not column mis-mappings.');
       if (below) warn('Scoring', `${below} line(s) have a raw guarantee below the ${CONTRACT_MIN} hr minimum`, 'Unusual — check the guarantee row alignment.');
     }
-
-    // credit vs bidline line-type agreement (drift detector)
     if (c1) {
       let mismatch = 0;
       for (const l of bidlineList) {
@@ -313,53 +277,16 @@ async function main() {
     }
   }
 
-  // period for fingerprint key
-  fp.period = derivePeriod(parsers, bidlineDocs, creditData);
+  // period (for fingerprint key)
+  fp.period = bps
+    ? `${bps.getFullYear()}-${String(bps.getMonth() + 1).padStart(2, '0')}`
+    : (creditData.map(cd => parsers.extractCreditPeriod(cd.text)).find(Boolean) || 'unknown');
 
-  // ── month-over-month diff ────────────────────────────────────────────────
-  let changeNotes = [];
-  if (fp.base && fp.aircraft && fp.position) {
-    const history = fingerprint.loadHistory(fp);
-    const prior = fingerprint.priorSnapshot(history, fp.period);
-    changeNotes = fingerprint.diff(prior, fp);
-    fp._priorPeriod = prior ? prior.period : null;
-  }
-
-  printReport(folder, fp, changeNotes);
-
-  // save fingerprint last (so the diff above compared against the prior month)
-  if (fp.base && fp.aircraft && fp.position) {
-    const saved = fingerprint.save(fp);
-    console.log(`\nFingerprint saved: ${path.relative(REPO_ROOT, saved)}`);
-  } else {
-    console.log('\n(Fingerprint not saved — base/aircraft/position could not be determined.)');
-  }
-
-  const hasErr = findings.some(f => f.level === 'err');
-  process.exit(hasErr ? 1 : 0);
-}
-
-function periodScore(text, parsers) {
-  const m = text.match(/([A-Za-z]{3})(\d{2})-([A-Za-z]{3})(\d{2})/);
-  if (!m) return 0;
-  const MONTHS = { JAN: 0, FEB: 1, MAR: 2, APR: 3, MAY: 4, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11 };
-  const endMon = MONTHS[m[3].toUpperCase()] || 0;
-  const endYr = parseInt(m[4]) + 2000;
-  return endYr * 12 + endMon;
-}
-
-function derivePeriod(parsers, bidlineDocs, creditData) {
-  const bps = parsers.getBidPeriodStart();
-  if (bps) return `${bps.getFullYear()}-${String(bps.getMonth() + 1).padStart(2, '0')}`;
-  for (const cd of creditData) {
-    const p = parsers.extractCreditPeriod(cd.text);
-    if (p) return p;
-  }
-  return 'unknown';
+  return { findings, fp, parsed: { bidlineLines, meta, c1, c2 } };
 }
 
 // ── report ───────────────────────────────────────────────────────────────────
-function printReport(folder, fp, changeNotes) {
+function printReport(folder, fp, changeNotes, findings) {
   const ICON = { ok: '[OK]  ', warn: '[WARN]', err: '[ERR] ' };
   const line = '─'.repeat(64);
   console.log('\n' + line);
@@ -376,13 +303,11 @@ function printReport(folder, fp, changeNotes) {
     for (const f of bySection[sec]) console.log(`  ${ICON[f.level]} ${f.msg}`);
   }
 
-  // change-vs-last-month
   console.log('\nChange since last month');
   if (!fp._priorPeriod) console.log('  (no prior fingerprint for this base/aircraft/position — this run becomes the baseline)');
   else if (!changeNotes.length) console.log(`  No structural changes vs ${fp._priorPeriod}.`);
   else { console.log(`  vs ${fp._priorPeriod}:`); for (const c of changeNotes) console.log(`  • ${c}`); }
 
-  // suggested actions
   const actionable = findings.filter(f => (f.level === 'err' || f.level === 'warn') && f.hint);
   if (actionable.length) {
     console.log('\nSuggested actions');
@@ -393,16 +318,108 @@ function printReport(folder, fp, changeNotes) {
     }
   }
 
-  // verdict
   const e = findings.filter(f => f.level === 'err').length;
   const w = findings.filter(f => f.level === 'warn').length;
   console.log('\n' + line);
   let verdict;
   if (e) verdict = `VERDICT: ${e} error(s), ${w} warning(s) — code changes likely needed (see Suggested actions).`;
   else if (w) verdict = `VERDICT: 0 errors, ${w} warning(s) — probably fine, worth a glance.`;
-  else verdict = 'VERDICT: all clear — no code changes needed this month.';
+  else verdict = 'VERDICT: all clear — no code changes needed.';
   console.log(verdict);
   console.log(line);
 }
 
-main().catch(e => { console.error('\nUnexpected failure:', e); process.exit(2); });
+// ── main ─────────────────────────────────────────────────────────────────────
+async function main() {
+  const folderArg = process.argv[2];
+  if (!folderArg) {
+    console.log('Usage: node bid-file-doctor.js <folder-with-month-PDFs>\n');
+    const candidates = fs.readdirSync(REPO_ROOT, { withFileTypes: true })
+      .filter(d => d.isDirectory() && !d.name.startsWith('.') && !['tools', 'backups', 'node_modules'].includes(d.name))
+      .filter(d => { try { return listPdfs(path.join(REPO_ROOT, d.name)).length > 0; } catch { return false; } })
+      .map(d => d.name);
+    if (candidates.length) console.log('Folders with PDFs you could check:\n  ' + candidates.join('\n  '));
+    process.exit(2);
+  }
+  const folder = path.resolve(folderArg);
+  if (!fs.existsSync(folder)) { console.error(`Folder not found: ${folder}`); process.exit(2); }
+
+  const appVersion = readAppVersion(ABR_HTML);
+  const parsers = loadAbrParsers(ABR_HTML, pdfjsLib);
+
+  const pdfs = listPdfs(folder);
+  if (!pdfs.length) { console.error(`No PDFs in ${folder}`); process.exit(2); }
+
+  // classify every PDF with the app's own detector
+  const classified = [];
+  for (const p of pdfs) {
+    const file = fileFromPath(p);
+    let text = '';
+    try { text = await parsers.extractTextFromPDF(file); }
+    catch (e) { console.log(`\n[ERR]  Could not read ${path.basename(p)}: ${e.message}`); continue; }
+    classified.push({ path: p, name: path.basename(p), file, text, type: parsers.detectFileType(text) });
+  }
+  const bidlineDocs = classified.filter(c => c.type === 'bidline');
+  const creditDocs = classified.filter(c => c.type === 'credit');
+  const unknownDocs = classified.filter(c => c.type === 'unknown');
+
+  if (unknownDocs.length) {
+    console.log('\nUnrecognized files (not bidline or credit):');
+    for (const u of unknownDocs) console.log(`  [WARN] ${u.name} — check detectFileType() if this should be parsed`);
+  }
+  if (!bidlineDocs.length) {
+    console.error('\n[ERR] No bidline schedule PDF found in this folder. The schedule did not match detectFileType()==="bidline" (check the CREW SCHEDULE FROM / "<AC> <POS>" header).');
+    process.exit(1);
+  }
+
+  // Do the credit files carry an aircraft token (e.g. "747 Lines")? If so, pair
+  // each schedule only with the credit files for its fleet; otherwise (un-tagged
+  // names) all credit files belong to the single schedule in the folder.
+  const creditTagged = creditDocs.some(c => /\b7\d{2}\b/.test(c.name));
+
+  console.log(`\nFound ${bidlineDocs.length} schedule(s) and ${creditDocs.length} credit file(s) in ${path.basename(folder)}.`);
+
+  let anyError = false;
+  for (const bidlineDoc of bidlineDocs) {
+    // peek the aircraft so we can pair credit files before the full analysis
+    parsers.resetBidPeriodStart();
+    let fam = null;
+    try {
+      const probe = await parsers.parseBidlineWithPositions(bidlineDoc.file);
+      fam = aircraftFamily(probe.meta && probe.meta.aircraftType);
+    } catch { /* analyzeSchedule will report the failure */ }
+
+    const paired = (creditTagged && fam)
+      ? creditDocs.filter(c => c.name.toUpperCase().includes(fam))
+      : creditDocs;
+
+    const { findings, fp } = await analyzeSchedule(bidlineDoc, paired, parsers, appVersion);
+
+    let changeNotes = [];
+    if (fp.base && fp.aircraft && fp.position) {
+      const history = fingerprint.loadHistory(fp);
+      const prior = fingerprint.priorSnapshot(history, fp.period);
+      changeNotes = fingerprint.diff(prior, fp);
+      fp._priorPeriod = prior ? prior.period : null;
+    }
+
+    printReport(folder, fp, changeNotes, findings);
+
+    if (fp.base && fp.aircraft && fp.position) {
+      const saved = fingerprint.save(fp);
+      console.log(`Fingerprint saved: ${path.relative(REPO_ROOT, saved)}`);
+    } else {
+      console.log('(Fingerprint not saved — base/aircraft/position could not be determined.)');
+    }
+    if (findings.some(f => f.level === 'err')) anyError = true;
+  }
+
+  process.exit(anyError ? 1 : 0);
+}
+
+// Run as a CLI, or expose the engine for the portal reviewer to reuse.
+if (require.main === module) {
+  main().catch(e => { console.error('\nUnexpected failure:', e); process.exit(2); });
+}
+
+module.exports = { analyzeSchedule, printReport, aircraftFamily, mergedGuarantee, KNOWN_TYPES };

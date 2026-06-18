@@ -1,0 +1,63 @@
+name: Monthly Bid File Review
+
+# Reviews the new bid posting for every base/aircraft/position and alerts (the
+# job fails → GitHub emails the repo owner) if any file-format change is detected
+# that could break the app. The bid package is available no later than 12:00Z on
+# the 15th; this runs at 13:00Z for a buffer.
+#
+# Setup (once): add repository secrets ATLAS_USERNAME and ATLAS_PASSWORD
+# (Settings → Secrets and variables → Actions). Without them the job is skipped.
+#
+# Privacy: the repo is public, so this job uploads ONLY the non-sensitive review
+# summary. The parsed bid dataset is NOT uploaded (it would be publicly
+# downloadable). Generate the full dataset privately on your own machine with
+#   cd tools && node portal-review.js        (writes to tools/out/, gitignored)
+
+on:
+  schedule:
+    - cron: '0 13 15 * *'   # 13:00 UTC on the 15th of every month
+  workflow_dispatch: {}       # allow manual runs for testing
+
+permissions:
+  contents: read
+
+concurrency:
+  group: monthly-bid-review
+  cancel-in-progress: false
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install reviewer dependencies
+        working-directory: tools
+        run: npm install --no-audit --no-fund
+
+      - name: Run portal review
+        id: review
+        working-directory: tools
+        env:
+          ATLAS_USERNAME: ${{ secrets.ATLAS_USERNAME }}
+          ATLAS_PASSWORD: ${{ secrets.ATLAS_PASSWORD }}
+        run: |
+          if [ -z "$ATLAS_USERNAME" ] || [ -z "$ATLAS_PASSWORD" ]; then
+            echo "::warning::ATLAS_USERNAME / ATLAS_PASSWORD secrets are not set — skipping the portal review."
+            exit 0
+          fi
+          node portal-review.js
+
+      - name: Upload review summary (non-sensitive)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bid-review-summary
+          path: tools/out/**/review-summary.json
+          retention-days: 90
+          if-no-files-found: ignore

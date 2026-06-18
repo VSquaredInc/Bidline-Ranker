@@ -76,7 +76,7 @@ function readAppVersion(htmlPath) {
   return m ? m[1] : 'unknown';
 }
 
-// Wrap a Buffer as the minimal File-like object the parsers expect.
+// Wrap a file on disk as the minimal File-like object the parsers expect.
 function fileFromPath(p) {
   const fsp = require('fs');
   const path = require('path');
@@ -89,4 +89,22 @@ function fileFromPath(p) {
   };
 }
 
-module.exports = { loadAbrParsers, readAppVersion, fileFromPath, REQUIRED_FNS };
+// Wrap an in-memory Buffer (e.g. a PDF downloaded from the portal) the same way.
+function fileFromBuffer(name, buffer) {
+  return {
+    name,
+    arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+  };
+}
+
+// Read the AIRCRAFT_BASES map out of ABR.html so the reviewer iterates the same
+// fleet/base list the app offers — single source of truth, no drift.
+function readAircraftBases(htmlPath) {
+  const html = fs.readFileSync(htmlPath, 'utf8');
+  const m = html.match(/AIRCRAFT_BASES\s*=\s*(\{[\s\S]*?\})/);
+  if (!m) throw new Error('Could not find AIRCRAFT_BASES in ABR.html.');
+  // eslint-disable-next-line no-eval
+  return eval('(' + m[1] + ')');
+}
+
+module.exports = { loadAbrParsers, readAppVersion, fileFromPath, fileFromBuffer, readAircraftBases, REQUIRED_FNS };

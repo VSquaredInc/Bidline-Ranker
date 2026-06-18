@@ -1,2 +1,6 @@
 node_modules/
 package-lock.json
+
+# Parsed bid datasets are PRIVATE (Atlas-internal data) — never commit.
+# They are produced as CI artifacts until a hosting/access model is chosen.
+out/
