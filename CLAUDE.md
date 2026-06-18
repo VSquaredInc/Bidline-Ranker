@@ -49,7 +49,7 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 | `pdf.min.js` / `pdf.worker.min.js` | PDF.js v3.11.174 bundled locally (not CDN) |
 | `backups/` | Timestamped HTML backups — never commit these to git |
 
-**PDF parsing:** PDF.js runs in-browser. `parseBidlineWithPositions()` is the main parser. `parseCreditValue()` handles credit PDFs. PDF Y=0 is bottom; sort descending for top-to-bottom reading. `rowTolerance=3px`, `colTolerance=15px`.
+**PDF parsing:** PDF.js runs in-browser. `parseBidlineWithPositions()` is the main bidline parser; `parseCreditByGeometry()` parses 2026 credit PDFs positionally (legacy `parseCreditValue()` is the pre-2026 fallback). PDF Y=0 is bottom; sort descending for top-to-bottom reading. `rowTolerance=3px`, `colTolerance=15px`.
 
 **Portal fetch:** `api/fetch-bid.js` deployed on Vercel at `https://bidline.vercel.app/api/fetch-bid`. Supports both Basic Auth and NTLM against the Atlas Air SharePoint (`employees.atlasair.com/FlightOps/BidPackage`). Auto-detects auth type on first request.
 
@@ -86,7 +86,13 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 
 ### Credit PDF Parsing
 
-`parseCreditValue()` reads the 2026 column-per-line format. **Guarantee row:** reads from the `CREDIT ART33` row ("SUM GREATER OF CREDIT OR RIG w ART33 AND ULR") — NOT `SUM OF CREDITS`. Strip the `CREDIT ART33` label prefix before extracting numbers to avoid the "33" in the label being captured as the first value. For 60-day lines, credit1 (single month) and credit2 (two-month cumulative) are averaged in the merge step.
+**Active parser (v1.7.1+): `parseCreditByGeometry(file)`** — reads the 2026 column-per-line format **positionally** (groups text items into rows by Y, maps each value to its line number by X-coordinate), the same approach as `parseBidlineWithPositions()`. Dispatched via `parseCreditFile(file, text)`: geometry parser when the text contains `SUM OF CREDITS`, else falls back to the legacy `parseCreditValue(text)`.
+
+**Why geometry, not flat text:** `extractTextFromPDF()` collapses the PDF into line-strings, and on some PDFs (e.g. Jul 2026 LAX 747) the guarantee row and the line-number rows fragment and interleave *by column*. This caused the old text parser to (a) silently drop ~half the lines when a line-number row got merged with neighbouring text, and (b) read the guarantee as 0 or mis-map it — so every line floored to the 64 hr contract minimum. The positional parser is immune to this collapse.
+
+**Guarantee row** is identified as the topmost row whose label band (x < 175) contains `ART33` and which has real (non-zero) numeric cells — i.e. "SUM GREATER OF CREDIT OR RIG w ART33 AND ULR", which sits above the all-zero "Art 33 PREM" row. Days-off comes from the `Off` row; line types from the Primary/Secondary/Reserve string cells. For 60-day lines, credit1 (single month) and credit2 (two-month cumulative) are averaged in the merge step.
+
+The legacy `parseCreditValue()` (flat-text) is retained only as the fallback for pre-2026 formats.
 
 ---
 

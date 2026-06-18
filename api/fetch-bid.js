@@ -159,6 +159,8 @@ async function listFiles(username, password, aircraft, base, crewPosition) {
         const n = f.Name.toUpperCase();
 
         // Bidline schedule for the pilot's crew position.
+        // Accept both "BIDLINE" and "BIDLINES" — Atlas switched from plural ("Bidlines",
+        // pre-Jul 2026) to singular ("Bidline", Jul 2026 onward).
         // Match any separator before the position: "747- FO", "747 FO", "747-FO", "747 - FO"
         const bidlinePositionMatch = new RegExp(`[\\s\\-]+\\s*${pos}(\\s|\\.|$)`).test(n);
         if (n.includes('BIDLINE') && bidlinePositionMatch) {

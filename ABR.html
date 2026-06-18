@@ -1613,7 +1613,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.7.0';
+        const APP_VERSION   = '1.7.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2586,6 +2586,97 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return lines;
         }
 
+        // Geometry-based credit parser for the 2026 column-per-line format.
+        //
+        // The flat-text parser (parseCreditValue) is unreliable on this format:
+        // when extractTextFromPDF() collapses the PDF into line-strings, the
+        // guarantee row ("SUM GREATER OF CREDIT OR RIG w ART33 AND ULR") and the
+        // line-number rows can fragment and interleave by column, which both
+        // drops whole lines and mis-maps guarantee values (observed on the
+        // Jul 2026 LAX 747 credit PDFs — every line floored to the 64 hr minimum).
+        //
+        // This reads the PDF positionally instead: it groups text items into rows
+        // by Y, then maps each value to its line number by X-coordinate — the same
+        // approach parseBidlineWithPositions() already uses. Returns the same shape
+        // as parseCreditValue: { [lineNum]: { lineNum, lineType, guarantee, tafb, daysOff } }.
+        async function parseCreditByGeometry(file) {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            const out = {};
+            const LABEL_X = 175;  // x < this is the row-label column; x >= this is data
+            const COL_TOL = 6;    // x tolerance when aligning a cell to a line column
+
+            for (let p = 1; p <= pdf.numPages; p++) {
+                const page = await pdf.getPage(p);
+                const tc = await page.getTextContent();
+                const items = tc.items
+                    .map(it => ({ x: it.transform[4], y: it.transform[5], s: it.str.trim() }))
+                    .filter(it => it.s !== '');
+                // Sort top-to-bottom, then left-to-right, and group into rows by Y.
+                items.sort((a, b) => b.y - a.y || a.x - b.x);
+                const rows = [];
+                let cur = null;
+                for (const it of items) {
+                    if (!cur || (cur.y - it.y) > 3) { cur = { y: it.y, items: [] }; rows.push(cur); }
+                    cur.items.push(it);
+                }
+                const labelOf = r => r.items.filter(i => i.x < LABEL_X).map(i => i.s).join(' ');
+
+                rows.forEach((lnRow, ri) => {
+                    // A line-number row holds 2+ standalone 4-digit tokens in the data area.
+                    const cols = lnRow.items
+                        .filter(i => i.x >= LABEL_X && /^\d{4}$/.test(i.s))
+                        .map(i => ({ x: i.x, lineNum: i.s }));
+                    if (cols.length < 2) return;
+
+                    // Find the relevant rows above this line-number row (top-to-bottom).
+                    let gRow = null, offRow = null, typeItems = null;
+                    for (let k = 0; k < ri; k++) {
+                        const r = rows[k];
+                        const lbl = labelOf(r);
+                        const nums = r.items.filter(i => i.x >= LABEL_X && /^\d+\.?\d*$/.test(i.s));
+                        // Guarantee = topmost ART33-labelled numeric row with real (non-zero) values.
+                        if (!gRow && /ART33/.test(lbl) && nums.length >= cols.length && nums.some(n => parseFloat(n.s) > 0)) gRow = nums;
+                        // Days off = topmost "Off" row.
+                        if (!offRow && /\bOff\b/.test(lbl) && nums.length >= cols.length) offRow = nums;
+                        // Line types = the row whose data cells are Primary/Secondary/Reserve strings.
+                        if (!typeItems) {
+                            const ti = r.items.filter(i => i.x >= LABEL_X && /^(Primary|Secondary|Reserve)\b/.test(i.s));
+                            if (ti.length >= cols.length) typeItems = ti;
+                        }
+                    }
+
+                    const cellAt = (numItems, colX) => {
+                        if (!numItems) return null;
+                        const c = numItems.find(n => Math.abs(n.x - colX) <= COL_TOL);
+                        return c ? parseFloat(c.s) : null;
+                    };
+                    cols.forEach(c => {
+                        const g    = cellAt(gRow, c.x);
+                        const dOff = cellAt(offRow, c.x);
+                        const t    = typeItems && typeItems.find(n => Math.abs(n.x - c.x) <= COL_TOL);
+                        out[c.lineNum] = {
+                            lineNum:  c.lineNum,
+                            lineType: t ? t.s.trim() : 'Unknown',
+                            guarantee: g    != null ? g    : 0,
+                            tafb: 0,
+                            daysOff:   dOff != null ? dOff : 0
+                        };
+                    });
+                });
+            }
+            return out;
+        }
+
+        // Parse a credit file: positional parser for the 2026 column format,
+        // falling back to the legacy flat-text parser for older formats.
+        async function parseCreditFile(file, text) {
+            if (text && text.includes('SUM OF CREDITS')) {
+                return await parseCreditByGeometry(file);
+            }
+            return parseCreditValue(text);
+        }
+
         // ── Period boundary helpers ────────────────────────────────────────────
 
         // Returns the first day of BP2 (second bid period).
@@ -3009,8 +3100,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // === End validation ===
 
                 // Parse documents
-                const credit1Data = credit1Text ? parseCreditValue(credit1Text) : {};
-                const credit2Data = credit2Text ? parseCreditValue(credit2Text) : {};
+                const credit1Data = creditMonth1File ? await parseCreditFile(creditMonth1File, credit1Text) : {};
+                const credit2Data = creditMonth2File ? await parseCreditFile(creditMonth2File, credit2Text) : {};
 
                 // Also try position-based parsing for more accurate date detection
                 const { lines: bidlinePositions, meta: bidlineMeta } = await parseBidlineWithPositions(bidlineFile);
