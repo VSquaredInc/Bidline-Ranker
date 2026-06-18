@@ -47,11 +47,14 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 | `service-worker.js` | PWA cache-first offline support |
 | `manifest.json` | PWA manifest (name, icons, theme) |
 | `pdf.min.js` / `pdf.worker.min.js` | PDF.js v3.11.174 bundled locally (not CDN) |
+| `tools/` | Maintenance tooling (not shipped). `bid-file-doctor.js` — see below |
 | `backups/` | Timestamped HTML backups — never commit these to git |
 
 **PDF parsing:** PDF.js runs in-browser. `parseBidlineWithPositions()` is the main bidline parser; `parseCreditByGeometry()` parses 2026 credit PDFs positionally (legacy `parseCreditValue()` is the pre-2026 fallback). PDF Y=0 is bottom; sort descending for top-to-bottom reading. `rowTolerance=3px`, `colTolerance=15px`.
 
 **Portal fetch:** `api/fetch-bid.js` deployed on Vercel at `https://bidline.vercel.app/api/fetch-bid`. Supports both Basic Auth and NTLM against the Atlas Air SharePoint (`employees.atlasair.com/FlightOps/BidPackage`). Auto-detects auth type on first request.
+
+**Monthly file-review tool (`tools/bid-file-doctor.js`):** Run when a new bid posts, before assuming the new PDFs parse cleanly. It loads the *real* parsers out of `ABR.html` (via `lib/abr-loader.js`, so it tests shipped code, not a copy), runs them against a folder of that month's PDFs, checks invariants, and diffs against last month's saved fingerprint (`tools/fingerprints/<BASE>-<AC>-<POS>.json`). Surfaces filename-pattern changes, credit-table format changes, new/renamed line types, dropped lines, and the "everything floored to 64" symptom. Usage: `cd tools && npm install` (once), then `node bid-file-doctor.js "../LAX"`. Node-only, run on the dev machine. If `ABR.html` renames a parser, update `REQUIRED_FNS` in `lib/abr-loader.js`. See `tools/README.md`.
 
 ---
 

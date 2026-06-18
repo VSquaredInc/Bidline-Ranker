@@ -1,0 +1,48 @@
+[
+  {
+    "savedAt": "2026-06-18T06:47:05.435Z",
+    "appVersion": "1.7.1",
+    "base": "LAX",
+    "aircraft": "744",
+    "position": "FO",
+    "period": "2026-07",
+    "bidlineLineCount": 108,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 26,
+      "Primary 60-day Int": 15,
+      "Primary AdH": 17,
+      "Secondary AdH": 13,
+      "Secondary 60-day": 15,
+      "Reserve AdH": 13,
+      "Reserve 60-day AdH": 9
+    },
+    "daysOffRange": [
+      14,
+      18
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "747 Lines Jul26-Aug26 Period.pdf",
+        "lineCount": 367,
+        "guaranteeNonZero": 367
+      },
+      {
+        "name": "747 Lines Jul26-Jul26 Period.pdf",
+        "lineCount": 884,
+        "guaranteeNonZero": 884
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      85.6
+    ],
+    "primaryCount": 58,
+    "primaryFlooredCount": 4,
+    "primaryFlooredPct": 7
+  }
+]

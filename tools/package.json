@@ -1,0 +1,12 @@
+{
+  "name": "bidline-tools",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Maintenance tooling for the Bidline Ranker (not shipped to users).",
+  "scripts": {
+    "doctor": "node bid-file-doctor.js"
+  },
+  "dependencies": {
+    "pdfjs-dist": "3.11.174"
+  }
+}
