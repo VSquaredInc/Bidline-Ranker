@@ -1,0 +1,48 @@
+[
+  {
+    "savedAt": "2026-07-14T23:28:35.480Z",
+    "appVersion": "1.7.1",
+    "base": "MIA",
+    "aircraft": "76F",
+    "position": "FO",
+    "period": "2026-08",
+    "bidlineLineCount": 20,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 9,
+      "Primary 60-day Int": 3,
+      "Secondary AdH": 1,
+      "Secondary 60-day": 2,
+      "Reserve AdH": 2,
+      "Reserve 60-day AdH": 3
+    },
+    "daysOffRange": [
+      14,
+      23
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "767 Lines Aug26-Sep26 Period.pdf",
+        "lineCount": 52,
+        "guaranteeNonZero": 52
+      },
+      {
+        "name": "767 Lines Aug26-Aug26 Period.pdf",
+        "lineCount": 126,
+        "guaranteeNonZero": 126
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      78.81
+    ],
+    "primaryCount": 12,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 92
+  }
+]

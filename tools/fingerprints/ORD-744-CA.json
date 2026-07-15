@@ -1,0 +1,50 @@
+[
+  {
+    "savedAt": "2026-07-14T23:28:28.891Z",
+    "appVersion": "1.7.1",
+    "base": "ORD",
+    "aircraft": "744",
+    "position": "CA",
+    "period": "2026-08",
+    "bidlineLineCount": 56,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 18,
+      "Primary 60-day Int": 11,
+      "Primary AdH": 11,
+      "Primary 60-day AdH": 4,
+      "Secondary AdH": 2,
+      "Secondary 60-day": 2,
+      "Reserve AdH": 5,
+      "Reserve 60-day AdH": 3
+    },
+    "daysOffRange": [
+      14,
+      17
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "747 Lines Aug26-Aug26 Period.pdf",
+        "lineCount": 877,
+        "guaranteeNonZero": 877
+      },
+      {
+        "name": "747 Lines Aug26-Sep26 Period.pdf",
+        "lineCount": 352,
+        "guaranteeNonZero": 352
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      83.09
+    ],
+    "primaryCount": 44,
+    "primaryUnreadCount": 1,
+    "primaryUnreadPct": 2,
+    "primaryAtFloorPct": 5
+  }
+]

@@ -1,0 +1,50 @@
+[
+  {
+    "savedAt": "2026-07-14T23:28:18.534Z",
+    "appVersion": "1.7.1",
+    "base": "JFK",
+    "aircraft": "744",
+    "position": "FO",
+    "period": "2026-08",
+    "bidlineLineCount": 90,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 24,
+      "Primary 60-day Int": 22,
+      "Primary AdH": 5,
+      "Primary 60-day AdH": 2,
+      "Secondary AdH": 10,
+      "Secondary 60-day": 15,
+      "Reserve AdH": 6,
+      "Reserve 60-day AdH": 6
+    },
+    "daysOffRange": [
+      14,
+      19
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "747 Lines Aug26-Sep26 Period.pdf",
+        "lineCount": 352,
+        "guaranteeNonZero": 352
+      },
+      {
+        "name": "747 Lines Aug26-Aug26 Period.pdf",
+        "lineCount": 877,
+        "guaranteeNonZero": 877
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      85.49
+    ],
+    "primaryCount": 53,
+    "primaryUnreadCount": 1,
+    "primaryUnreadPct": 2,
+    "primaryAtFloorPct": 13
+  }
+]
