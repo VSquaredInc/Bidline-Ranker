@@ -170,9 +170,12 @@ Implemented from Atlas Article 7.pdf (governing source):
 | 7.D.2.d | Partially conflicted vacation must abut Days-Off |
 | 7.D.4 | Fully conflicted vacation may slide in either direction (with anchor) |
 | 7.D.5 | Exempt weeks — company may designate up to 4 (max 1/month); sliding OUT is explicitly permitted |
-| 7.D.7 | Award Days — ≤3 workdays at ONE edge of a trip pairing; only one set per vacation period |
+| 7.D.7 | Award Days — ≤3 workdays at ONE edge (trailing only, see 25.K.3.a below) of a trip pairing; only one set per vacation period |
+| 25.K.3.a | LOC — leading edge of a trip pairing preceding an overlapping vacation is mandatorily converted to Days Off (or deadhead) by the Company; uncapped, automatic, stacks with 7.D.7 |
 
-**Source verification:** Atlas Article 25.pdf does NOT mention exempt weeks (25.K covers vacation bid period mechanics only). The IBT Teaching Topic (Vacation Slide.pdf, May 2024) is a user-friendly summary and source for the exempt weeks list and Award Days/exempt weeks intersection — but is NOT the governing CBA.
+**Source verification:** Atlas Article 25.pdf does NOT mention exempt weeks (25.K covers vacation bid period mechanics only). The IBT Teaching Topic (Vacation Slide.pdf, May 2024) is a user-friendly summary and source for the exempt weeks list and Award Days/exempt weeks intersection — but is NOT the governing CBA. **25.K.3.a** is clarified by a separate Letter of Clarification (`Vacation/Altas LOC Article 25.K.3.a.pdf`, signed 2023-02-27): the portion of a Trip Pairing preceding an overlapping vacation is converted to Days Off or a deadhead home, at the Company's option — this is mandatory and uncapped, unlike the discretionary ≤3-day 7.D.7 Award Days election.
+
+**25.K.3.a vs. 7.D.7 (v1.9.0, implemented 2026-07-15):** These are two separate provisions, not competing options for the same edge. In `evalVacPosition`/`evalVacContribForPeriod`/`computeModifiedTrips`, the **leading edge** of a trip that overlaps the (candidate) vacation window is always free/uncapped `locDaysOff` (25.K.3.a) — it never consumes the one-per-vacation election. The **trailing edge** is the only side eligible for the ≤3-day 7.D.7 `awardDays` election (`awardSide` is therefore always `'after'` now). The two stack: a trip can have both a leading LOC trim and a trailing Award Days trim credited simultaneously. Previously the code modeled these as mutually exclusive alternatives (picking whichever edge was larger), which under-counted `effectiveDaysOff` whenever both a leading and trailing edge existed. Surfaced by a user who inferred the gap from results: "if a legal slide exists with 3 award days on either side... the only correct answer is award after" — because the leading side is free regardless, so the election should always go to the trailing side. Display: "LOC: Xd" / "AWRD: Xd" shown separately (can appear together) in the optimizer column; CSV export includes both.
 
 ### Restricted Weeks
 
@@ -189,7 +192,7 @@ Implemented from Atlas Article 7.pdf (governing source):
 - Slide positions that would enter a restricted week the pilot was NOT already in are skipped
 - `origRestrictedWeeks` computed from original `vacStart`/`vacEnd` — sliding OUT of a restricted week is allowed
 
-**Award Days + restricted weeks:** `awardA`/`awardB` are zeroed when the pre/post-vacation workdays fall inside a restricted week. Note: 7.D.7 is silent on this — this rule comes from the IBT Teaching Topic only (conservative implementation).
+**Award Days + restricted weeks:** the trailing-edge `awardB` (7.D.7) is zeroed when the post-vacation workdays fall inside a restricted week. Note: 7.D.7 is silent on this — this rule comes from the IBT Teaching Topic only (conservative implementation). The leading-edge `locDaysOff` (25.K.3.a) is NOT gated by restricted weeks — it's a separate mandatory provision, not the discretionary Award Days election the IBT restriction targets.
 
 ---
 

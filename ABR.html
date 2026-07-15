@@ -1621,7 +1621,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.8.0';
+        const APP_VERSION   = '1.9.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2717,7 +2717,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         // periodStart/periodEnd optionally clip trips to the period boundary so that
         // cross-period trips are attributed correctly to each bid period.
         function evalVacContribForPeriod(trips, unionWindows, periodStart, periodEnd) {
-            let vacWorkdays = 0, awardDays = 0;
+            let vacWorkdays = 0, awardDays = 0, locDaysOff = 0;
             for (const trip of trips) {
                 // Clip trip to period boundaries
                 const tStart = periodStart && trip.start < periodStart ? periodStart : trip.start;
@@ -2733,16 +2733,17 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 for (const ci of covered) {
                     vacWorkdays += Math.round((ci.end - ci.start) / 86400000) + 1;
                 }
-                // Award Days from uncovered workdays at clipped trip edges
+                // Uncovered workdays at clipped trip edges: leading edge is 25.K.3.a LOC
+                // (mandatory, uncapped); trailing edge is the 7.D.7 Award Days election (≤3).
                 const firstStart = covered[0].start;
                 const lastEnd    = covered[covered.length - 1].end;
                 const daysBefore = firstStart > tStart ? Math.round((firstStart - tStart) / 86400000) : 0;
                 const daysAfter  = lastEnd    < tEnd   ? Math.round((tEnd - lastEnd)      / 86400000) : 0;
-                const aA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
-                const aB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
-                awardDays = Math.max(awardDays, aA, aB);
+                locDaysOff += daysBefore;
+                const aB = (daysAfter > 0 && daysAfter <= 3) ? daysAfter : 0;
+                awardDays = Math.max(awardDays, aB);
             }
-            return { vacWorkdays, awardDays };
+            return { vacWorkdays, awardDays, locDaysOff };
         }
 
         // ── Vacation range management ──────────────────────────────────────────
@@ -2885,11 +2886,13 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         }
 
         // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays,
-        // effectiveDaysOff and the award-day range(s) so downstream (filter, display) can use them.
+        // effectiveDaysOff and the award-day/LOC range(s) so downstream (filter, display) can use them.
         function evalVacPosition(slideStart, slideEnd, trips, naturalOff) {
             let awardDays = 0;
             let vacWorkdays = 0;
-            let awardRange = null;   // {start, end, side: 'before'|'after'} — single set per CBA 7.D.7
+            let locDaysOff = 0;      // 25.K.3.a LOC — mandatory pre-vacation trip truncation
+            let awardRange = null;   // {start, end, side: 'after'} — single set per CBA 7.D.7
+            const locRanges = [];
 
             for (const trip of trips) {
                 if (slideStart > trip.end || slideEnd < trip.start) continue;
@@ -2904,21 +2907,21 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 const daysBefore = slideStart > trip.start ? daysBetween(trip.start, slideStart) : 0;
                 const daysAfter  = slideEnd   < trip.end   ? daysBetween(slideEnd,  trip.end)    : 0;
 
-                // Award Days: ≤3 workdays at either end of pairing (one set per vacation,
-                // take the highest count across all affected trips).
+                // LOC 25.K.3.a: the portion of a Trip Pairing preceding an overlapping vacation
+                // is mandatorily converted to Days Off (or deadhead) by the Company — uncapped,
+                // automatic, and independent of the 7.D.7 Award Days election below.
+                if (daysBefore > 0) {
+                    locDaysOff += daysBefore;
+                    locRanges.push({ start: new Date(trip.start), end: addDays(trip.start, daysBefore - 1) });
+                }
+
+                // 7.D.7 Award Days: ≤3 workdays at the trailing edge only. 25.K.3.a already
+                // covers the leading edge above, so the one-set-per-vacation election is
+                // reserved for the side with no automatic CBA remedy.
                 // Award days may not fall in Article 7 restricted weeks.
-                const preEnd    = addDays(slideStart, -1);
-                const postStart = addDays(slideEnd,    1);
-                const awardA = (daysBefore > 0 && daysBefore <= 3 &&
-                                restrictedWeeksIn(trip.start, preEnd).size === 0) ? daysBefore : 0;
+                const postStart = addDays(slideEnd, 1);
                 const awardB = (daysAfter  > 0 && daysAfter  <= 3 &&
                                 restrictedWeeksIn(postStart, trip.end).size === 0) ? daysAfter  : 0;
-                if (awardA > awardDays) {
-                    awardDays  = awardA;
-                    awardRange = { start: new Date(trip.start),
-                                   end:   addDays(trip.start, awardA - 1),
-                                   side:  'before' };
-                }
                 if (awardB > awardDays) {
                     awardDays  = awardB;
                     awardRange = { start: addDays(trip.end, -(awardB - 1)),
@@ -2930,7 +2933,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return {
                 awardDays,
                 vacWorkdays,
-                effectiveDaysOff: naturalOff + vacWorkdays + awardDays,
+                locDaysOff,
+                locRanges,
+                effectiveDaysOff: naturalOff + vacWorkdays + awardDays + locDaysOff,
                 awardRange
             };
         }
@@ -2966,7 +2971,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         //   7.D.2.f.ii — 30/60-day lines may slide into subsequent Bid Month (past schedule end)
         //   7.D.4   — fully conflicted may slide either direction (with anchor)
         //   7.D.5   — restricted weeks: may slide OUT of, but NOT INTO
-        //   7.D.7   — Award Days: ≤3 workdays at ONE edge of ONE trip pairing
+        //   7.D.7   — Award Days: ≤3 workdays at ONE edge of ONE trip pairing (trailing edge only)
+        //   25.K.3.a — LOC: leading edge of a trip pairing preceding an overlapping vacation is
+        //     mandatorily converted to Days Off/deadhead — uncapped, automatic, stacks with 7.D.7
         //
         // opts:
         //   lastVacDayEffectivelyOff — bool. See Fix A: user asserts trip arrival on the last
@@ -3105,6 +3112,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 effectiveDaysOff:        best.r.effectiveDaysOff,
                 awardDays:               best.r.awardDays,
                 vacWorkdays:             best.r.vacWorkdays,
+                locDaysOff:              best.r.locDaysOff,
+                locRanges:               best.r.locRanges || [],
                 // Fix E: always return the chosen window (even when equal to original)
                 chosenSlideStart:        best.sStart,
                 chosenSlideEnd:          best.sEnd,
@@ -3121,7 +3130,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     direction:        alternative.direction,
                     effectiveDaysOff: alternative.r.effectiveDaysOff,
                     awardDays:        alternative.r.awardDays,
-                    awardRange:       alternative.r.awardRange
+                    awardRange:       alternative.r.awardRange,
+                    locDaysOff:       alternative.r.locDaysOff
                 } : null,
                 naturalOff,
                 isPartiallyConflicted
@@ -3402,20 +3412,22 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         }));
                         slidUnionWindows = mergeIntervals(slidWindows);
 
-                        // Fix 2a: collect award-day ranges so the desired-off filter can credit them
+                        // Fix 2a: collect award-day / LOC ranges so the desired-off filter can credit them
                         const awardRanges = rangeScores.flatMap(rs => rs.awardRanges || []);
+                        const locRanges   = rangeScores.flatMap(rs => rs.locRanges   || []);
 
                         // Per-period contributions from union windows (clip cross-period trips at bp2Start)
                         const bp2End1 = bp2Start ? new Date(bp2Start.getTime() - 86400000) : null;
                         const vcBP1 = evalVacContribForPeriod(lineTrips, slidUnionWindows, null, bp2End1);
                         const vcBP2 = evalVacContribForPeriod(lineTrips, slidUnionWindows, bp2Start, null);
 
-                        const effBP1 = datesOffBP1.length + vcBP1.vacWorkdays + vcBP1.awardDays;
-                        const effBP2 = datesOffBP2.length + vcBP2.vacWorkdays + vcBP2.awardDays;
+                        const effBP1 = datesOffBP1.length + vcBP1.vacWorkdays + vcBP1.awardDays + vcBP1.locDaysOff;
+                        const effBP2 = datesOffBP2.length + vcBP2.vacWorkdays + vcBP2.awardDays + vcBP2.locDaysOff;
 
                         vacScore = {
                             // Totals for display / backward compat
                             awardDays:   vcBP1.awardDays + vcBP2.awardDays,
+                            locDaysOff:  vcBP1.locDaysOff + vcBP2.locDaysOff,
                             vacWorkdays: vcBP1.vacWorkdays + vcBP2.vacWorkdays,
                             effectiveDaysOff: effBP1 + effBP2,
                             // Per-period detail
@@ -3428,6 +3440,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             recommendedSlideEnd:   rangeScores[0]?.recommendedSlideEnd   || null,
                             slidUnionWindows,
                             awardRanges,
+                            locRanges,
                             rangeScores,
                             slidWindows
                         };
@@ -3440,6 +3453,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     //   3. It falls within a chosen vacation window (all periods, per Fix E — even
                     //      when the "chosen" window equals the original, i.e. no slide happened)
                     //   4. It falls within a slide-generated Award Day range (Fix 2a)
+                    //   5. It falls within a 25.K.3.a LOC range (mandatory pre-vacation trim)
                     let allDatesOff = true;
 
                     if (desiredDates.length > 0) {
@@ -3447,6 +3461,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         // recommendedSlideStart/End pair which is null when no shift occurred.
                         const vacWindows   = (vacMode && vacScore) ? (vacScore.slidUnionWindows || []) : [];
                         const awardRanges  = (vacMode && vacScore) ? (vacScore.awardRanges     || []) : [];
+                        const locRanges    = (vacMode && vacScore) ? (vacScore.locRanges       || []) : [];
 
                         if (bidlineInfo) {
                             for (const desiredDate of desiredDates) {
@@ -3458,7 +3473,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                 const dateAfterScheduleEnd = desiredDate > schedEnd;
                                 const dateInVacWindow  = vacWindows.some(w  => desiredDate >= w.start && desiredDate <= w.end);
                                 const dateInAwardRange = awardRanges.some(a => desiredDate >= a.start && desiredDate <= a.end);
-                                if (!dateInSchedule && !dateAfterScheduleEnd && !dateInVacWindow && !dateInAwardRange) {
+                                const dateInLocRange   = locRanges.some(l => desiredDate >= l.start && desiredDate <= l.end);
+                                if (!dateInSchedule && !dateAfterScheduleEnd && !dateInVacWindow && !dateInAwardRange && !dateInLocRange) {
                                     allDatesOff = false;
                                     break;
                                 }
@@ -3729,8 +3745,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
                 }
 
-                // Award days (vacation only): if ≤3 workdays remain at either end of the
-                // combined exclusion zone, those also become paid days off — exclude them too.
+                // Vacation edges: the leading edge of a trip pairing that precedes an
+                // overlapping vacation is mandatorily converted to Days Off under 25.K.3.a
+                // (uncapped, automatic). The trailing edge only gets ≤3 workdays via the
+                // separate 7.D.7 Award Days election.
                 if (hasVac) {
                     const firstEx = merged[0];
                     const lastEx  = merged[merged.length - 1];
@@ -3738,20 +3756,20 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         ? Math.round((firstEx.start.getTime() - trip.start.getTime()) / 86400000) : 0;
                     const daysAfter  = lastEx.end < trip.end
                         ? Math.round((trip.end.getTime() - lastEx.end.getTime()) / 86400000) : 0;
-                    const awardA = (daysBefore > 0 && daysBefore <= 3) ? daysBefore : 0;
-                    const awardB = (daysAfter  > 0 && daysAfter  <= 3) ? daysAfter  : 0;
-                    if (awardB >= awardA && awardB > 0) {
+                    if (daysBefore > 0) {
+                        merged.unshift({
+                            start: new Date(trip.start),
+                            end:   new Date(trip.start.getTime() + (daysBefore - 1) * 86400000)
+                        });
+                    }
+                    const awardB = (daysAfter > 0 && daysAfter <= 3) ? daysAfter : 0;
+                    if (awardB > 0) {
                         merged.push({
                             start: new Date(trip.end.getTime() - (awardB - 1) * 86400000),
                             end:   new Date(trip.end)
                         });
-                    } else if (awardA > 0) {
-                        merged.unshift({
-                            start: new Date(trip.start),
-                            end:   new Date(trip.start.getTime() + (awardA - 1) * 86400000)
-                        });
                     }
-                    // Re-sort and collapse after award day additions
+                    // Re-sort and collapse after edge-trim additions
                     merged.sort((a, b) => a.start - b.start);
                     for (let j = merged.length - 1; j > 0; j--) {
                         const prev = merged[j - 1];
@@ -3802,7 +3820,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             }
             function vacLine(contrib) {
                 if (!contrib) return vacMode ? '<span class="opt-line opt-good">No conflict</span>' : null;
-                if (contrib.awardDays > 0)  return `<span class="opt-line opt-award">AWRD: ${contrib.awardDays}d</span>`;
+                const parts = [];
+                if (contrib.locDaysOff > 0) parts.push(`LOC: ${contrib.locDaysOff}d`);
+                if (contrib.awardDays  > 0) parts.push(`AWRD: ${contrib.awardDays}d`);
+                if (parts.length > 0) return `<span class="opt-line opt-award">${parts.join(' + ')}</span>`;
                 if (contrib.vacWorkdays > 0) return `<span class="opt-line">Vac: ${contrib.vacWorkdays}d</span>`;
                 return '<span class="opt-line opt-good">No conflict</span>';
             }
@@ -3826,24 +3847,31 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     push(bufferLine(trainScore));
                 }
                 if (vacMode && vacScore) {
-                    push(vacLine({ awardDays: vacScore.awardDays || 0, vacWorkdays: vacScore.vacWorkdays || 0 }));
+                    push(vacLine({ awardDays: vacScore.awardDays || 0, vacWorkdays: vacScore.vacWorkdays || 0, locDaysOff: vacScore.locDaysOff || 0 }));
                 }
             }
 
             // Slide display for each vacation range.
-            // Show the chosen slide, then the AWRD side (before/after), then any
-            // legal alternative on the opposite side of the anchor within 1 day of the
+            // Show the chosen slide, then any LOC (25.K.3.a, leading edge) / AWRD
+            // (7.D.7, trailing edge) days, then any legal alternative on the opposite
+            // side of the anchor within 1 day of the
             // winner's score — lets the pilot pick when direction preference matters.
             if (vacMode && vacScore && vacScore.rangeScores) {
                 vacScore.rangeScores.forEach(rs => {
                     if (!rs) return;
                     if (rs.recommendedSlideStart) {
-                        const sideTag = rs.awardSide ? ` <span style="opacity:.7">(AWRD ${rs.awardSide})</span>` : '';
+                        const tags = [];
+                        if (rs.locDaysOff > 0) tags.push(`LOC ${rs.locDaysOff}d`);
+                        if (rs.awardSide)      tags.push(`AWRD ${rs.awardSide}`);
+                        const sideTag = tags.length ? ` <span style="opacity:.7">(${tags.join(', ')})</span>` : '';
                         push(`<span class="opt-line opt-slide">Slide: ${fmtDate(rs.recommendedSlideStart)}–${fmtDate(rs.recommendedSlideEnd)}${sideTag}</span>`);
                     }
                     if (rs.alternative && rs.alternative.slideStart) {
                         const alt = rs.alternative;
-                        const sideTag = alt.awardRange ? ` <span style="opacity:.7">(AWRD ${alt.awardRange.side})</span>` : '';
+                        const tags = [];
+                        if (alt.locDaysOff > 0) tags.push(`LOC ${alt.locDaysOff}d`);
+                        if (alt.awardRange)     tags.push(`AWRD ${alt.awardRange.side}`);
+                        const sideTag = tags.length ? ` <span style="opacity:.7">(${tags.join(', ')})</span>` : '';
                         push(`<span class="opt-line opt-slide" style="opacity:.75">Alt (${alt.direction}): ${fmtDate(alt.slideStart)}–${fmtDate(alt.slideEnd)}${sideTag}</span>`);
                     }
                 });
@@ -3980,7 +4008,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const slide = r.vacScore.recommendedSlideStart
                         ? `Slide: ${fmtDate(r.vacScore.recommendedSlideStart)}-${fmtDate(r.vacScore.recommendedSlideEnd)}`
                         : 'No slide';
-                    optInfo = `"AWRD:${r.vacScore.awardDays} | EffOff:${r.vacScore.effectiveDaysOff} | ${slide}"`;
+                    optInfo = `"LOC:${r.vacScore.locDaysOff || 0} | AWRD:${r.vacScore.awardDays} | EffOff:${r.vacScore.effectiveDaysOff} | ${slide}"`;
                 } else if (r.trainMode && r.trainScore) {
                     const compliance = r.trainScore.isNone ? 'off days' : r.trainScore.isPartial ? 'partial' : 'full';
                     optInfo = `"Train:${r.trainScore.overlapDays}/${r.trainScore.totalTrainingDays}(${compliance}) Buffer:${r.trainScore.bufferDays}"`;

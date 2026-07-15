@@ -336,21 +336,43 @@ function assertNull(name, actual) {
     `chose ${fmt(r.chosenSlideStart)}`);
 })();
 
-// ─── FIX 2a — award ranges reported ─────────────────────────────────────────
+// ─── FIX 2a / 25.K.3.a — LOC (leading edge) vs. Award Days (trailing edge) ──
+// Uses evalVacPosition directly (not computeVacationScore) to pin down a specific
+// slide position — computeVacationScore's own search can find an equally-scoring
+// alternate position, which would obscure what a single position actually credits.
 (function testAwardRangesReported() {
-  // Trip 7/20-7/28 (9 days). Vacation 7/22-7/28 (7 days). Vacation covers last 7 of trip.
-  // 2 workdays remain before vacation (7/20, 7/21) → eligible AWRD "before".
-  const trips = [ trip(2026, 7, 20, 7, 28) ];
-  const datesOff = [];
-  const scheduleEnd = D(2026, 8, 31);
-  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, D(2026,7,22), D(2026,7,28));
+  const trips = [ trip(2026, 7, 20, 7, 28) ]; // 9-day trip: 7/20-7/28
 
-  check('2a-1 awardRanges array populated when AWRD present',
-    Array.isArray(r.awardRanges) && r.awardRanges.length > 0,
-    `awardRanges = ${JSON.stringify(r.awardRanges)}`);
-  check('2a-2 awardSide is "before" or "after"',
-    ['before','after'].includes(r.awardSide),
-    `awardSide = ${r.awardSide}`);
+  // Leading-edge case: window 7/22-7/28 covers the LAST 7 days of the trip, leaving
+  // 2 workdays before (7/20, 7/21). Under 25.K.3.a that's a mandatory, uncapped LOC
+  // conversion — NOT a 7.D.7 Award Days election.
+  const r = slide.evalVacPosition(D(2026,7,22), D(2026,7,28), trips, 0);
+  check('2a-1 locRanges array populated for leading-edge trim',
+    Array.isArray(r.locRanges) && r.locRanges.length > 0,
+    `locRanges = ${JSON.stringify(r.locRanges)}`);
+  check('2a-2 locDaysOff = 2 (7/20-7/21, uncapped 25.K.3.a conversion)',
+    r.locDaysOff === 2, `locDaysOff = ${r.locDaysOff}`);
+  check('2a-3 no 7.D.7 award range on this trip (no trailing edge)',
+    r.awardRange === null && r.awardDays === 0,
+    `awardRange = ${JSON.stringify(r.awardRange)}, awardDays = ${r.awardDays}`);
+
+  // Trailing-edge case: window 7/20-7/26 covers the FIRST 7 days, leaving 2 workdays
+  // after — no automatic CBA remedy on this side, so it draws the 7.D.7 election.
+  const r2 = slide.evalVacPosition(D(2026,7,20), D(2026,7,26), trips, 0);
+  check('2a-4 trailing edge uses AWRD (7.D.7), not LOC',
+    r2.awardRange && r2.awardRange.side === 'after' && r2.awardDays === 2,
+    `awardRange = ${JSON.stringify(r2.awardRange)}, awardDays = ${r2.awardDays}`);
+  check('2a-5 trailing edge: locDaysOff = 0 (no leading edge on this trip)',
+    r2.locDaysOff === 0, `locDaysOff = ${r2.locDaysOff}`);
+
+  // Stacking case: window 7/22-7/25 lands in the MIDDLE of the trip, leaving workdays
+  // on both edges. The leading 2 days are free under 25.K.3.a; the trailing 3 days
+  // draw the one 7.D.7 election. Both must be credited simultaneously (the bug this
+  // fix addresses: previously only the larger of the two sides was ever credited).
+  const r3 = slide.evalVacPosition(D(2026,7,22), D(2026,7,25), trips, 0);
+  check('2a-6 stacking: leading LOC and trailing AWRD both credited at once',
+    r3.locDaysOff === 2 && r3.awardDays === 3 && r3.awardRange.side === 'after',
+    `locDaysOff=${r3.locDaysOff}, awardDays=${r3.awardDays}, awardRange=${JSON.stringify(r3.awardRange)}`);
 })();
 
 // ─── FIX 7.D.5 — restricted weeks (still enforced after refactor) ───────────
