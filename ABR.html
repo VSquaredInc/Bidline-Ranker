@@ -1397,25 +1397,31 @@
                 </div>
                 <div id="vacationInputs" class="optimizer-inputs" style="display:none;">
                     <div id="vacRangesContainer">
-                        <div class="date-range-row" data-vac-range-id="1">
-                            <div class="date-range-inputs">
-                                <div class="form-group">
-                                    <label>Awarded Vacation Start</label>
-                                    <input type="date" class="vac-range-start">
+                        <div class="vac-range-wrapper" data-vac-range-id="1">
+                            <div class="date-range-row" data-vac-range-id="1">
+                                <div class="date-range-inputs">
+                                    <div class="form-group">
+                                        <label>Awarded Vacation Start</label>
+                                        <input type="date" class="vac-range-start">
+                                    </div>
+                                    <span class="date-range-separator">to</span>
+                                    <div class="form-group">
+                                        <label>Awarded Vacation End</label>
+                                        <input type="date" class="vac-range-end">
+                                    </div>
                                 </div>
-                                <span class="date-range-separator">to</span>
-                                <div class="form-group">
-                                    <label>Awarded Vacation End</label>
-                                    <input type="date" class="vac-range-end">
-                                </div>
+                                <button type="button" class="btn-remove-range" onclick="removeVacationRange(1)" title="Remove this vacation period" style="visibility:hidden;">✕</button>
                             </div>
-                            <button type="button" class="btn-remove-range" onclick="removeVacationRange(1)" title="Remove this vacation period" style="visibility:hidden;">✕</button>
+                            <label class="vac-range-flag" style="display:block; margin-top:6px; font-size:0.87em; color:var(--gray-700);">
+                                <input type="checkbox" class="vac-early-arrival" style="vertical-align:middle;">
+                                Last vacation day: trip arrives before 0700z (Atlas treats as day off)
+                            </label>
                         </div>
                     </div>
                     <button type="button" class="btn-add-range" onclick="addVacationRange()" style="margin-top:8px;">
                         <span>+</span> Add Another Vacation Period
                     </button>
-                    <div class="form-hint" style="margin-top:8px;">Add one row per awarded vacation week. Each is optimally slid independently; rankings use the combined effective days off. Optimal slide within CBA rules computed automatically.</div>
+                    <div class="form-hint" style="margin-top:8px;">Add one row per awarded vacation week. Each is optimally slid independently; rankings use the combined effective days off. Optimal slide within CBA Article 7.D rules computed automatically. Check the "early arrival" box only when your line's trip pairing arrives before 0700z on your last vacation day — Crew Planning will classify that day as off and slides become more restricted (must abut a Day Off per 7.D.2.d).</div>
                 </div>
             </div>
         </div>
@@ -1560,7 +1566,9 @@
                 <p>Enable <strong>Training Mode</strong>, <strong>Vacation Mode</strong>, or both to factor known schedule conflicts into the ranking. Each mode re-scores affected bid periods using <em>Effective Days Off</em> rather than guarantee hours, so lines with better conflict placement rank higher.</p>
                 <ul>
                     <li><strong>Training Mode</strong> — Enter your scheduled training start and end dates. Training on a <em>workday</em> is ideal: the pilot is scheduled to fly anyway, so training effectively replaces that trip and frees the day. Training on an <em>off day</em> costs the pilot a scheduled day off. The Optimizer column shows the result per period: <span style="color:#4ade80">✓ Xd on days</span> (all workdays — best), <span style="color:#f97316">Xd/Yd on ⚠</span> (partial overlap), or <span style="color:#ef4444">✗ Xd off days</span> (all off days — worst).</li>
-                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within the CBA anchor rule (the slid block must overlap at least one day of your awarded dates) to find the position that maximizes effective days off. <em>Vacation workdays</em> are trip days covered by vacation. <em>Award days</em> are uncovered workdays at either edge of a trip pairing when vacation starts or ends within 3 days of the pairing boundary — the company cannot effectively utilize you for those days. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days).</li>
+                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts, ≤3 Award Days at one edge of one trip) to find the position that maximizes effective days off. <em>Vacation workdays</em> are trip days covered by vacation. <em>Award days</em> are uncovered workdays at either edge of a trip pairing when vacation starts or ends within 3 days of the pairing boundary — the company cannot effectively utilize you for those days. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction.</li>
+                    <li><strong>Vacation adjustments Crew Planning applies automatically</strong> — Per LOC on 7.D.9 (May 2024) the Company automatically returns you to base no later than 0701z on the workday before your vacation and schedules R-1 (Home Reserve) on the first workday after your vacation ends (unless you opt out via Bidding by 1200z on the 20th). These are on top of the printed schedule, so your <em>actual</em> days off around vacation are usually one greater on each side than what the app shows from the bidline PDF.</li>
+                    <li><strong>Early-arrival flag (0700z rule)</strong> — Atlas treats any day whose trip duty ends before 0700z as a Day Off. If your last vacation day happens to be the day a trip pairing arrives before 0700z, check the box under the vacation dates. This changes the classification from "fully conflicted" to "partially conflicted", which under 7.D.2.d restricts the slide to positions that abut a Day Off. Without this flag the app assumes your line's PDF X-markers are the complete off-day picture.</li>
                     <li><strong>60-day lines</strong> — Results are shown per bid period (BP1 / BP2) so you can see exactly which period each conflict affects.</li>
                 </ul>
             </div>
@@ -1613,7 +1621,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.7.1';
+        const APP_VERSION   = '1.8.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2744,50 +2752,61 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         function addVacationRange() {
             const container = document.getElementById('vacRangesContainer');
             const rangeId = nextVacRangeId++;
-            const row = document.createElement('div');
-            row.className = 'date-range-row';
-            row.dataset.vacRangeId = rangeId;
-            row.innerHTML = `
-                <div class="date-range-inputs">
-                    <div class="form-group">
-                        <label>Awarded Vacation Start</label>
-                        <input type="date" class="vac-range-start">
+            const wrapper = document.createElement('div');
+            wrapper.className = 'vac-range-wrapper';
+            wrapper.dataset.vacRangeId = rangeId;
+            wrapper.innerHTML = `
+                <div class="date-range-row" data-vac-range-id="${rangeId}">
+                    <div class="date-range-inputs">
+                        <div class="form-group">
+                            <label>Awarded Vacation Start</label>
+                            <input type="date" class="vac-range-start">
+                        </div>
+                        <span class="date-range-separator">to</span>
+                        <div class="form-group">
+                            <label>Awarded Vacation End</label>
+                            <input type="date" class="vac-range-end">
+                        </div>
                     </div>
-                    <span class="date-range-separator">to</span>
-                    <div class="form-group">
-                        <label>Awarded Vacation End</label>
-                        <input type="date" class="vac-range-end">
-                    </div>
+                    <button type="button" class="btn-remove-range" onclick="removeVacationRange(${rangeId})" title="Remove this vacation period">✕</button>
                 </div>
-                <button type="button" class="btn-remove-range" onclick="removeVacationRange(${rangeId})" title="Remove this vacation period">✕</button>
+                <label class="vac-range-flag" style="display:block; margin-top:6px; font-size:0.87em; color:var(--gray-700);">
+                    <input type="checkbox" class="vac-early-arrival" style="vertical-align:middle;">
+                    Last vacation day: trip arrives before 0700z (Atlas treats as day off)
+                </label>
             `;
-            container.appendChild(row);
+            container.appendChild(wrapper);
             updateVacRemoveButtons();
-            setupDateRangeInputs(row.querySelector('.vac-range-start'), row.querySelector('.vac-range-end'));
+            setupDateRangeInputs(wrapper.querySelector('.vac-range-start'), wrapper.querySelector('.vac-range-end'));
         }
 
         function removeVacationRange(rangeId) {
-            const row = document.querySelector(`#vacRangesContainer .date-range-row[data-vac-range-id="${rangeId}"]`);
-            if (row) { row.remove(); updateVacRemoveButtons(); }
+            const wrapper = document.querySelector(`#vacRangesContainer .vac-range-wrapper[data-vac-range-id="${rangeId}"]`);
+            if (wrapper) { wrapper.remove(); updateVacRemoveButtons(); }
         }
 
         function updateVacRemoveButtons() {
-            const rows = document.querySelectorAll('#vacRangesContainer .date-range-row');
-            rows.forEach(row => {
-                const btn = row.querySelector('.btn-remove-range');
-                if (btn) btn.style.visibility = rows.length === 1 ? 'hidden' : 'visible';
+            const wrappers = document.querySelectorAll('#vacRangesContainer .vac-range-wrapper');
+            wrappers.forEach(w => {
+                const btn = w.querySelector('.btn-remove-range');
+                if (btn) btn.style.visibility = wrappers.length === 1 ? 'hidden' : 'visible';
             });
         }
 
         function getVacationRanges() {
             const ranges = [];
-            document.querySelectorAll('#vacRangesContainer .date-range-row').forEach(row => {
-                const s = row.querySelector('.vac-range-start');
-                const e = row.querySelector('.vac-range-end');
+            document.querySelectorAll('#vacRangesContainer .vac-range-wrapper').forEach(w => {
+                const s = w.querySelector('.vac-range-start');
+                const e = w.querySelector('.vac-range-end');
+                const flag = w.querySelector('.vac-early-arrival');
                 if (s && e && s.value && e.value) {
                     const start = new Date(s.value + 'T00:00:00');
                     const end   = new Date(e.value + 'T00:00:00');
-                    if (end >= start) ranges.push({ start, end });
+                    if (end >= start) ranges.push({
+                        start,
+                        end,
+                        lastVacDayEffectivelyOff: !!(flag && flag.checked)
+                    });
                 }
             });
             return ranges;
@@ -2834,10 +2853,43 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return { overlapDays, offDaysInTraining, bufferDays, isPartial, isNone, totalTrainingDays };
         }
 
-        // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays, effectiveDaysOff
+        // ── DST-safe day arithmetic ────────────────────────────────────────────
+        // 86400000-ms addition drifts by 1 hour across DST transitions, causing
+        // off-by-one date comparisons for slides that cross Mar 2nd Sun or Nov 1st Sun.
+        function addDays(date, n) {
+            const d = new Date(date);
+            d.setDate(d.getDate() + n);
+            return d;
+        }
+        function daysBetween(a, b) {
+            // Whole-day difference using UTC midnight to avoid DST hour drift
+            const aUTC = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+            const bUTC = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+            return Math.round((bUTC - aUTC) / 86400000);
+        }
+        function sameDay(a, b) {
+            return a.getFullYear() === b.getFullYear() &&
+                   a.getMonth()    === b.getMonth() &&
+                   a.getDate()     === b.getDate();
+        }
+
+        // Is `date` an "off" day for slide/abut purposes?
+        //   • X-marked in the bidline (datesOff)
+        //   • Beyond the line's scheduleEnd (Company hasn't scheduled anything yet)
+        //   • Flagged by user as effectively off (0700z arrival case — see Fix A)
+        function isEffectiveOff(date, datesOff, scheduleEnd, effectiveOffDates) {
+            if (scheduleEnd && date > scheduleEnd) return true;
+            if (datesOff && datesOff.some(d => sameDay(d, date))) return true;
+            if (effectiveOffDates && effectiveOffDates.some(d => sameDay(d, date))) return true;
+            return false;
+        }
+
+        // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays,
+        // effectiveDaysOff and the award-day range(s) so downstream (filter, display) can use them.
         function evalVacPosition(slideStart, slideEnd, trips, naturalOff) {
             let awardDays = 0;
             let vacWorkdays = 0;
+            let awardRange = null;   // {start, end, side: 'before'|'after'} — single set per CBA 7.D.7
 
             for (const trip of trips) {
                 if (slideStart > trip.end || slideEnd < trip.start) continue;
@@ -2846,34 +2898,40 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 const overlapStart = slideStart > trip.start ? slideStart : trip.start;
                 const overlapEnd   = slideEnd   < trip.end   ? slideEnd   : trip.end;
                 if (overlapStart <= overlapEnd) {
-                    vacWorkdays += Math.round((overlapEnd - overlapStart) / 86400000) + 1;
+                    vacWorkdays += daysBetween(overlapStart, overlapEnd) + 1;
                 }
 
-                // Workdays before vacation in this trip
-                const daysBefore = slideStart > trip.start
-                    ? Math.round((slideStart - trip.start) / 86400000)
-                    : 0;
+                const daysBefore = slideStart > trip.start ? daysBetween(trip.start, slideStart) : 0;
+                const daysAfter  = slideEnd   < trip.end   ? daysBetween(slideEnd,  trip.end)    : 0;
 
-                // Workdays after vacation in this trip
-                const daysAfter = slideEnd < trip.end
-                    ? Math.round((trip.end - slideEnd) / 86400000)
-                    : 0;
-
-                // Award Days: ≤3 workdays at either end of pairing (one set, take the better)
-                // Award days may not fall in Article 7 restricted weeks
-                const preEnd    = new Date(slideStart.getTime() - 86400000);
-                const postStart = new Date(slideEnd.getTime()   + 86400000);
+                // Award Days: ≤3 workdays at either end of pairing (one set per vacation,
+                // take the highest count across all affected trips).
+                // Award days may not fall in Article 7 restricted weeks.
+                const preEnd    = addDays(slideStart, -1);
+                const postStart = addDays(slideEnd,    1);
                 const awardA = (daysBefore > 0 && daysBefore <= 3 &&
                                 restrictedWeeksIn(trip.start, preEnd).size === 0) ? daysBefore : 0;
                 const awardB = (daysAfter  > 0 && daysAfter  <= 3 &&
                                 restrictedWeeksIn(postStart, trip.end).size === 0) ? daysAfter  : 0;
-                awardDays = Math.max(awardDays, awardA, awardB);
+                if (awardA > awardDays) {
+                    awardDays  = awardA;
+                    awardRange = { start: new Date(trip.start),
+                                   end:   addDays(trip.start, awardA - 1),
+                                   side:  'before' };
+                }
+                if (awardB > awardDays) {
+                    awardDays  = awardB;
+                    awardRange = { start: addDays(trip.end, -(awardB - 1)),
+                                   end:   new Date(trip.end),
+                                   side:  'after' };
+                }
             }
 
             return {
                 awardDays,
                 vacWorkdays,
-                effectiveDaysOff: naturalOff + vacWorkdays + awardDays
+                effectiveDaysOff: naturalOff + vacWorkdays + awardDays,
+                awardRange
             };
         }
 
@@ -2898,85 +2956,175 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             return found;
         }
 
-        // Find the optimal vacation slide within CBA anchor rule and return scoring
-        function computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd) {
-            const vacLength  = Math.round((vacEnd - vacStart) / 86400000) + 1;
-            const naturalOff = datesOff.filter(d => d <= scheduleEnd).length;
+        // Find the optimal vacation slide within CBA Article 7.D and return scoring.
+        //
+        // Enforces:
+        //   7.D.2.a — vacation stays a contiguous block (block moves as a unit)
+        //   7.D.2.b — anchor: at least one original vacation day remains
+        //   7.D.2.c — partial-conflict cap: cannot slide past first full-conflict position
+        //   7.D.2.d — partial-conflict abut: slid position must abut a Day Off on ≥1 side
+        //   7.D.2.f.ii — 30/60-day lines may slide into subsequent Bid Month (past schedule end)
+        //   7.D.4   — fully conflicted may slide either direction (with anchor)
+        //   7.D.5   — restricted weeks: may slide OUT of, but NOT INTO
+        //   7.D.7   — Award Days: ≤3 workdays at ONE edge of ONE trip pairing
+        //
+        // opts:
+        //   lastVacDayEffectivelyOff — bool. See Fix A: user asserts trip arrival on the last
+        //     vacation day is before 0700z, so that day is functionally a Day Off (Trent's rule).
+        //     Also affects partial-vs-full classification.
+        function computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, opts = {}) {
+            const vacLength = daysBetween(vacStart, vacEnd) + 1;
+
+            // Effective off dates: bidline X-marks + user-flagged (Fix A)
+            const userMarkedOff = [];
+            if (opts.lastVacDayEffectivelyOff) userMarkedOff.push(new Date(vacEnd));
+
+            // For scoring, count every effective off day up to and including scheduleEnd.
+            // Dates past scheduleEnd are handled separately by isEffectiveOff (they're always off).
+            const naturalOffSet = new Set();
+            for (const d of datesOff) if (!scheduleEnd || d <= scheduleEnd) naturalOffSet.add(d.getTime());
+            for (const d of userMarkedOff) if (!scheduleEnd || d <= scheduleEnd) naturalOffSet.add(d.getTime());
+            const naturalOff = naturalOffSet.size;
+
+            const isOff = (date) => isEffectiveOff(date, datesOff, scheduleEnd, userMarkedOff);
 
             // Restricted weeks the original awarded vacation already falls in — sliding OUT is OK
             const origRestrictedWeeks = restrictedWeeksIn(vacStart, vacEnd);
 
-            // Anchor rule: slid block must overlap at least 1 day of the original awarded dates
-            // → slideStart ∈ [vacStart-(vacLength-1), vacEnd]
-            const minStartMs = vacStart.getTime() - (vacLength - 1) * 86400000;
-            const maxStartMs = vacEnd.getTime();
+            // Anchor (7.D.2.b): slid block must overlap at least 1 day of original.
+            // slideStart ∈ [vacStart - (vacLength-1), vacEnd]
+            const minStart = addDays(vacStart, -(vacLength - 1));
+            const maxStart = new Date(vacEnd);
 
-            // CBA partial-conflict rule: if the original position is partially conflicted,
-            // the slide may not go past the first position of full conflict in either direction.
+            // Partial-conflict classification (7.D.2.c/d vs 7.D.4).
+            // A day inside the vacation is "on work" if it's a trip day AND not user-flagged as off.
             const origEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
-            const isPartiallyConflicted = origEval.vacWorkdays > 0 && origEval.vacWorkdays < vacLength;
-
-            let effectiveMinStart = minStartMs;
-            let effectiveMaxStart = maxStartMs;
-
-            if (isPartiallyConflicted) {
-                for (let ms = vacStart.getTime() - 86400000; ms >= minStartMs; ms -= 86400000) {
-                    const r = evalVacPosition(new Date(ms), new Date(ms + (vacLength - 1) * 86400000), trips, naturalOff);
-                    if (r.vacWorkdays >= vacLength) { effectiveMinStart = ms; break; }
+            // For classification: subtract any user-marked-off days that fall inside vacation
+            // (they LOOK like workdays to evalVacPosition but the pilot has asserted they're off).
+            let effectiveVacWorkdays = origEval.vacWorkdays;
+            for (const d of userMarkedOff) {
+                if (d >= vacStart && d <= vacEnd && trips.some(t => d >= t.start && d <= t.end)) {
+                    effectiveVacWorkdays = Math.max(0, effectiveVacWorkdays - 1);
                 }
-                for (let ms = vacStart.getTime() + 86400000; ms <= maxStartMs; ms += 86400000) {
-                    const r = evalVacPosition(new Date(ms), new Date(ms + (vacLength - 1) * 86400000), trips, naturalOff);
-                    if (r.vacWorkdays >= vacLength) { effectiveMaxStart = ms; break; }
+            }
+            const isPartiallyConflicted = effectiveVacWorkdays > 0 && effectiveVacWorkdays < vacLength;
+
+            // 7.D.2.c cap: partial-conflicted slide may not go past first full-conflict position.
+            // NB: we search both directions and cap independently — the CBA's directional wording
+            // is subsumed by 7.D.2.d abut in practice.
+            let effectiveMinStart = minStart;
+            let effectiveMaxStart = maxStart;
+            if (isPartiallyConflicted) {
+                for (let d = addDays(vacStart, -1); d >= minStart; d = addDays(d, -1)) {
+                    const cand = evalVacPosition(d, addDays(d, vacLength - 1), trips, naturalOff);
+                    if (cand.vacWorkdays >= vacLength) { effectiveMinStart = d; break; }
+                }
+                for (let d = addDays(vacStart, 1); d <= maxStart; d = addDays(d, 1)) {
+                    const cand = evalVacPosition(d, addDays(d, vacLength - 1), trips, naturalOff);
+                    if (cand.vacWorkdays >= vacLength) { effectiveMaxStart = d; break; }
                 }
             }
 
-            let bestEff       = -1;
-            let bestAward     = 0;
-            let bestVacWork   = 0;
-            let bestSlideStart = null;
-            let bestSlideEnd   = null;
+            // Search every legal position, scoring each. We keep the overall best AND
+            // the best position on each side of the original (for Fix 2b alternatives).
+            const positions = [];  // {sStart, sEnd, r, direction}
+            for (let d = new Date(effectiveMinStart); d <= effectiveMaxStart; d = addDays(d, 1)) {
+                const sStart = new Date(d);
+                const sEnd   = addDays(d, vacLength - 1);
 
-            for (let ms = effectiveMinStart; ms <= effectiveMaxStart; ms += 86400000) {
-                const sStart = new Date(ms);
-                const sEnd   = new Date(ms + (vacLength - 1) * 86400000);
+                // Fix C: 7.D.2.f.ii allows sliding into the subsequent Bid Month. Post-schedule
+                // dates are treated as off by isOff() (Company hasn't scheduled anything yet).
+                // No hard cap on sEnd — the anchor rule already limits how far right we can go.
 
-                if (sEnd > scheduleEnd) continue; // don't slide past schedule
-
-                // Cannot slide INTO a restricted week that the original vacation wasn't already in
+                // 7.D.5: cannot slide INTO a restricted week the original wasn't already in
                 const candRestricted = restrictedWeeksIn(sStart, sEnd);
                 if ([...candRestricted].some(w => !origRestrictedWeeks.has(w))) continue;
 
-                const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
+                // 7.D.2.d abut rule: partially-conflicted vacation must abut a Day Off on ≥1 side
+                if (isPartiallyConflicted) {
+                    const dayBefore = addDays(sStart, -1);
+                    const dayAfter  = addDays(sEnd,    1);
+                    if (!isOff(dayBefore) && !isOff(dayAfter)) continue;
+                }
 
-                if (r.effectiveDaysOff > bestEff ||
-                    (r.effectiveDaysOff === bestEff && r.awardDays > bestAward)) {
-                    bestEff        = r.effectiveDaysOff;
-                    bestAward      = r.awardDays;
-                    bestVacWork    = r.vacWorkdays;
-                    bestSlideStart = new Date(sStart);
-                    bestSlideEnd   = new Date(sEnd);
+                const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
+                const cmp = sStart.getTime() - vacStart.getTime();
+                const direction = cmp < 0 ? 'left' : cmp > 0 ? 'right' : 'origin';
+                positions.push({ sStart, sEnd, r, direction, distanceFromOrig: Math.abs(cmp) });
+            }
+
+            // Fix D: explicit multi-key tiebreak.
+            //   1) higher effectiveDaysOff wins
+            //   2) higher awardDays wins
+            //   3) closer to original wins (least surprising)
+            //   4) earlier position wins (stable/deterministic)
+            const rank = (a, b) => {
+                if (a.r.effectiveDaysOff !== b.r.effectiveDaysOff) return b.r.effectiveDaysOff - a.r.effectiveDaysOff;
+                if (a.r.awardDays        !== b.r.awardDays)        return b.r.awardDays - a.r.awardDays;
+                if (a.distanceFromOrig   !== b.distanceFromOrig)   return a.distanceFromOrig - b.distanceFromOrig;
+                return a.sStart - b.sStart;
+            };
+
+            // Guaranteed baseline: original position (may fail 7.D.5 nothing — sanity fallback only)
+            const originEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
+            if (positions.length === 0) {
+                positions.push({
+                    sStart: new Date(vacStart), sEnd: new Date(vacEnd),
+                    r: originEval, direction: 'origin', distanceFromOrig: 0
+                });
+            }
+
+            positions.sort(rank);
+            const best = positions[0];
+
+            // Fix 2b: best alternative on the OPPOSITE side of the anchor from `best`.
+            // Surface it when it comes within 1 effective day off of the winner (close call).
+            let alternative = null;
+            if (best.direction !== 'origin') {
+                const oppositeDir = best.direction === 'left' ? 'right' : 'left';
+                const oppositeBest = positions.find(p => p.direction === oppositeDir);
+                if (oppositeBest && (best.r.effectiveDaysOff - oppositeBest.r.effectiveDaysOff) <= 1) {
+                    alternative = oppositeBest;
+                }
+            } else {
+                // If best is the origin, both directions may still offer valid slides — show either
+                const leftBest  = positions.find(p => p.direction === 'left');
+                const rightBest = positions.find(p => p.direction === 'right');
+                const cand = leftBest && rightBest
+                    ? (leftBest.r.effectiveDaysOff >= rightBest.r.effectiveDaysOff ? leftBest : rightBest)
+                    : (leftBest || rightBest);
+                if (cand && (best.r.effectiveDaysOff - cand.r.effectiveDaysOff) <= 1) {
+                    alternative = cand;
                 }
             }
 
-            // Fallback: use original position if all slide positions were beyond schedule
-            if (bestEff < 0) {
-                const r = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
-                bestEff        = r.effectiveDaysOff;
-                bestAward      = r.awardDays;
-                bestVacWork    = r.vacWorkdays;
-                bestSlideStart = new Date(vacStart);
-                bestSlideEnd   = new Date(vacEnd);
-            }
-
-            const isSlid = bestSlideStart.getTime() !== vacStart.getTime();
+            const isSlid = !sameDay(best.sStart, vacStart);
+            const awardRanges = best.r.awardRange ? [best.r.awardRange] : [];
 
             return {
-                effectiveDaysOff:        bestEff,
-                awardDays:               bestAward,
-                vacWorkdays:             bestVacWork,
-                recommendedSlideStart:   isSlid ? bestSlideStart : null,
-                recommendedSlideEnd:     isSlid ? bestSlideEnd   : null,
-                naturalOff
+                effectiveDaysOff:        best.r.effectiveDaysOff,
+                awardDays:               best.r.awardDays,
+                vacWorkdays:             best.r.vacWorkdays,
+                // Fix E: always return the chosen window (even when equal to original)
+                chosenSlideStart:        best.sStart,
+                chosenSlideEnd:          best.sEnd,
+                // Kept for back-compat: null when no actual slide happened
+                recommendedSlideStart:   isSlid ? best.sStart : null,
+                recommendedSlideEnd:     isSlid ? best.sEnd   : null,
+                isSlid,
+                awardRanges,
+                awardSide:               best.r.awardRange ? best.r.awardRange.side : null,
+                // Fix 2b: alternative direction (if close in score and legal)
+                alternative:             alternative ? {
+                    slideStart:       alternative.sStart,
+                    slideEnd:         alternative.sEnd,
+                    direction:        alternative.direction,
+                    effectiveDaysOff: alternative.r.effectiveDaysOff,
+                    awardDays:        alternative.r.awardDays,
+                    awardRange:       alternative.r.awardRange
+                } : null,
+                naturalOff,
+                isPartiallyConflicted
             };
         }
 
@@ -3238,17 +3386,24 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                     // ── Vacation per-period scoring ──────────────────────────────
                     if (vacMode && vacationRanges.length > 0 && bidlineInfo) {
-                        // Optimise each vacation range independently using ALL trips
+                        // Optimise each vacation range independently using ALL trips.
+                        // Pass through the per-range 0700z-arrival flag (Fix A).
                         const rangeScores = vacationRanges.map(vr =>
-                            computeVacationScore(lineTrips, lineDatesOff, schedEnd, vr.start, vr.end)
+                            computeVacationScore(lineTrips, lineDatesOff, schedEnd, vr.start, vr.end, {
+                                lastVacDayEffectivelyOff: !!vr.lastVacDayEffectivelyOff
+                            })
                         );
 
-                        // Build optimal slid windows and union them
-                        const slidWindows = rangeScores.map((rs, i) => ({
-                            start: rs.recommendedSlideStart || vacationRanges[i].start,
-                            end:   rs.recommendedSlideEnd   || vacationRanges[i].end
+                        // Fix E: use chosenSlideStart/End (never null) so filter always credits
+                        // vacation days even when the "best" slide equals the original position.
+                        const slidWindows = rangeScores.map(rs => ({
+                            start: rs.chosenSlideStart,
+                            end:   rs.chosenSlideEnd
                         }));
                         slidUnionWindows = mergeIntervals(slidWindows);
+
+                        // Fix 2a: collect award-day ranges so the desired-off filter can credit them
+                        const awardRanges = rangeScores.flatMap(rs => rs.awardRanges || []);
 
                         // Per-period contributions from union windows (clip cross-period trips at bp2Start)
                         const bp2End1 = bp2Start ? new Date(bp2Start.getTime() - 86400000) : null;
@@ -3268,27 +3423,30 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             effDaysOffBP2: effBP2,
                             vacContribBP1: vcBP1,
                             vacContribBP2: vcBP2,
-                            // Slide display (show first range's slide if one exists)
-                            recommendedSlideStart: slidWindows[0]?.start || null,
-                            recommendedSlideEnd:   slidWindows[0]?.end   || null,
+                            // Slide display: kept null when no shift, so UI still says "no slide"
+                            recommendedSlideStart: rangeScores[0]?.recommendedSlideStart || null,
+                            recommendedSlideEnd:   rangeScores[0]?.recommendedSlideEnd   || null,
                             slidUnionWindows,
+                            awardRanges,
                             rangeScores,
                             slidWindows
                         };
                     }
 
-                    // Check if all desired dates are off
-                    // A date is "off" if either:
-                    // 1. It has an X marker in the schedule (in datesOff)
-                    // 2. It falls AFTER the line's schedule end date (no flying scheduled for that period)
-                    // 3. It falls within the optimal vacation window (when vacation mode is active)
-                    // If no dates were specified, all lines pass this filter.
+                    // Check if all desired dates are off.
+                    // A date is "off" if any of:
+                    //   1. It has an X marker in the bidline schedule (datesOff)
+                    //   2. It falls after the line's schedule end (Company hasn't scheduled it)
+                    //   3. It falls within a chosen vacation window (all periods, per Fix E — even
+                    //      when the "chosen" window equals the original, i.e. no slide happened)
+                    //   4. It falls within a slide-generated Award Day range (Fix 2a)
                     let allDatesOff = true;
 
                     if (desiredDates.length > 0) {
-                        // Determine vacation window (original or optimal slide) for filter credit
-                        const vacWinStart = vacScore?.recommendedSlideStart ?? null;
-                        const vacWinEnd   = vacScore?.recommendedSlideEnd   ?? null;
+                        // Fix E: use slidUnionWindows (chosen, never null) instead of the
+                        // recommendedSlideStart/End pair which is null when no shift occurred.
+                        const vacWindows   = (vacMode && vacScore) ? (vacScore.slidUnionWindows || []) : [];
+                        const awardRanges  = (vacMode && vacScore) ? (vacScore.awardRanges     || []) : [];
 
                         if (bidlineInfo) {
                             for (const desiredDate of desiredDates) {
@@ -3298,9 +3456,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                     offDate.getDate() === desiredDate.getDate()
                                 );
                                 const dateAfterScheduleEnd = desiredDate > schedEnd;
-                                const dateInVacWindow = vacMode && vacWinStart && vacWinEnd &&
-                                    desiredDate >= vacWinStart && desiredDate <= vacWinEnd;
-                                if (!dateInSchedule && !dateAfterScheduleEnd && !dateInVacWindow) {
+                                const dateInVacWindow  = vacWindows.some(w  => desiredDate >= w.start && desiredDate <= w.end);
+                                const dateInAwardRange = awardRanges.some(a => desiredDate >= a.start && desiredDate <= a.end);
+                                if (!dateInSchedule && !dateAfterScheduleEnd && !dateInVacWindow && !dateInAwardRange) {
                                     allDatesOff = false;
                                     break;
                                 }
@@ -3672,11 +3830,21 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 }
             }
 
-            // Slide display for each vacation range
+            // Slide display for each vacation range.
+            // Show the chosen slide, then the AWRD side (before/after), then any
+            // legal alternative on the opposite side of the anchor within 1 day of the
+            // winner's score — lets the pilot pick when direction preference matters.
             if (vacMode && vacScore && vacScore.rangeScores) {
                 vacScore.rangeScores.forEach(rs => {
-                    if (rs && rs.recommendedSlideStart) {
-                        push(`<span class="opt-line opt-slide">Slide: ${fmtDate(rs.recommendedSlideStart)}–${fmtDate(rs.recommendedSlideEnd)}</span>`);
+                    if (!rs) return;
+                    if (rs.recommendedSlideStart) {
+                        const sideTag = rs.awardSide ? ` <span style="opacity:.7">(AWRD ${rs.awardSide})</span>` : '';
+                        push(`<span class="opt-line opt-slide">Slide: ${fmtDate(rs.recommendedSlideStart)}–${fmtDate(rs.recommendedSlideEnd)}${sideTag}</span>`);
+                    }
+                    if (rs.alternative && rs.alternative.slideStart) {
+                        const alt = rs.alternative;
+                        const sideTag = alt.awardRange ? ` <span style="opacity:.7">(AWRD ${alt.awardRange.side})</span>` : '';
+                        push(`<span class="opt-line opt-slide" style="opacity:.75">Alt (${alt.direction}): ${fmtDate(alt.slideStart)}–${fmtDate(alt.slideEnd)}${sideTag}</span>`);
                     }
                 });
             }

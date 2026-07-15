@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.7.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v13` (in service-worker.js)  
+**Current version:** 1.8.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v16` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
