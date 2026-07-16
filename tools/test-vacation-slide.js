@@ -392,6 +392,39 @@ function assertNull(name, actual) {
     `chose ${fmt(r.chosenSlideStart)}`);
 })();
 
+// ─── 7.D.2.d per-candidate abut — closes the 25.K.3.a "graze an unrelated trip" ────
+// exploit reported 2026-07-15: a fully-conflicted original vacation must not be able to
+// slide onto a position that is ITSELF partially conflicted (mixing real workdays from an
+// unrelated trip with already-off days) without satisfying its own abut requirement. Before
+// the fix, sliding to just barely clip the last day of an unrelated earlier trip harvested
+// that trip's entire (uncapped) 25.K.3.a leading-edge credit and out-scored the legitimate
+// resolution of the actually-conflicting trip.
+(function testPerCandidateAbut() {
+  // Trip A: 1/3-1/9. Off 1/10-1/11. Trip B: 1/12-1/20 (originally fully-conflicted vacation
+  // sits here). Off 1/21-1/23. Trip C: 1/24-1/28. Off 1/29-1/30.
+  const trips = [
+    trip(2026, 1, 3, 1, 9),
+    trip(2026, 1, 12, 1, 20),
+    trip(2026, 1, 24, 1, 28),
+  ];
+  const datesOff = [1, 2, 10, 11, 21, 22, 23, 29, 30].map(d => D(2026, 1, d));
+  const scheduleEnd = D(2026, 2, 28);
+  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, D(2026,1,12), D(2026,1,18));
+
+  check('abut-1 does NOT slide to 1/9-1/15 (grazes Trip A tail for an unearned LOC windfall)',
+    !slide.sameDay(r.chosenSlideStart, D(2026, 1, 9)),
+    `chose ${fmt(r.chosenSlideStart)}`);
+  check('abut-2 chosen position properly abuts a Day Off (1/11-1/17: abuts the 1/10-1/11 gap)',
+    slide.sameDay(r.chosenSlideStart, D(2026, 1, 11)),
+    `chose ${fmt(r.chosenSlideStart)}`);
+  check('abut-3 effectiveDaysOff is the legitimate max (18), not the exploited 20',
+    r.effectiveDaysOff === 18, `effectiveDaysOff = ${r.effectiveDaysOff}`);
+  check('abut-4 locDaysOff = 0 at the chosen position (no unrelated-trip windfall)',
+    r.locDaysOff === 0, `locDaysOff = ${r.locDaysOff}`);
+  check('abut-5 awardDays = 3 (legitimate trailing-edge 7.D.7 use)',
+    r.awardDays === 3, `awardDays = ${r.awardDays}`);
+})();
+
 // ─── Regression: original vacation on all off-days → no shift, no crash ─────
 (function testNoWorkDays() {
   const trips = [];  // no trips

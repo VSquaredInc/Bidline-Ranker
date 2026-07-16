@@ -1621,7 +1621,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.9.0';
+        const APP_VERSION   = '1.9.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2967,7 +2967,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         //   7.D.2.a — vacation stays a contiguous block (block moves as a unit)
         //   7.D.2.b — anchor: at least one original vacation day remains
         //   7.D.2.c — partial-conflict cap: cannot slide past first full-conflict position
-        //   7.D.2.d — partial-conflict abut: slid position must abut a Day Off on ≥1 side
+        //   7.D.2.d — partial-conflict abut: slid position must abut a Day Off on ≥1 side.
+        //     Evaluated PER CANDIDATE (r.vacWorkdays < vacLength at that position), not just
+        //     from the original award — otherwise a fully-conflicted original could slide onto
+        //     an unrelated, barely-overlapping trip to harvest its uncapped 25.K.3.a leading
+        //     edge without ever satisfying an abut requirement.
         //   7.D.2.f.ii — 30/60-day lines may slide into subsequent Bid Month (past schedule end)
         //   7.D.4   — fully conflicted may slide either direction (with anchor)
         //   7.D.5   — restricted weeks: may slide OUT of, but NOT INTO
@@ -3047,14 +3051,22 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 const candRestricted = restrictedWeeksIn(sStart, sEnd);
                 if ([...candRestricted].some(w => !origRestrictedWeeks.has(w))) continue;
 
-                // 7.D.2.d abut rule: partially-conflicted vacation must abut a Day Off on ≥1 side
-                if (isPartiallyConflicted) {
+                const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
+
+                // 7.D.2.d abut rule: evaluated per candidate, not just from the original award.
+                // A candidate that is ITSELF partially conflicted (mixes real workdays with
+                // already-off days) must abut a Day Off on ≥1 side — regardless of whether the
+                // original award was fully or partially conflicted. Without this, a fully
+                // conflicted original vacation could slide onto a barely-overlapping, unrelated
+                // trip purely to harvest the uncapped 25.K.3.a leading-edge credit (locDaysOff)
+                // for that trip's entire preceding length, without ever satisfying the abut
+                // requirement that position would otherwise need on its own merits.
+                const candPartial = r.vacWorkdays > 0 && r.vacWorkdays < vacLength;
+                if (candPartial) {
                     const dayBefore = addDays(sStart, -1);
                     const dayAfter  = addDays(sEnd,    1);
                     if (!isOff(dayBefore) && !isOff(dayAfter)) continue;
                 }
-
-                const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
                 const cmp = sStart.getTime() - vacStart.getTime();
                 const direction = cmp < 0 ? 'left' : cmp > 0 ? 'right' : 'origin';
                 positions.push({ sStart, sEnd, r, direction, distanceFromOrig: Math.abs(cmp) });
