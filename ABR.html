@@ -1566,7 +1566,7 @@
                 <p>Enable <strong>Training Mode</strong>, <strong>Vacation Mode</strong>, or both to factor known schedule conflicts into the ranking. Each mode re-scores affected bid periods using <em>Effective Days Off</em> rather than guarantee hours, so lines with better conflict placement rank higher.</p>
                 <ul>
                     <li><strong>Training Mode</strong> — Enter your scheduled training start and end dates. Training on a <em>workday</em> is ideal: the pilot is scheduled to fly anyway, so training effectively replaces that trip and frees the day. Training on an <em>off day</em> costs the pilot a scheduled day off. The Optimizer column shows the result per period: <span style="color:#4ade80">✓ Xd on days</span> (all workdays — best), <span style="color:#f97316">Xd/Yd on ⚠</span> (partial overlap), or <span style="color:#ef4444">✗ Xd off days</span> (all off days — worst).</li>
-                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts, ≤3 Award Days at one edge of one trip) to find the position that maximizes effective days off. <em>Vacation workdays</em> are trip days covered by vacation. <em>Award days</em> are uncovered workdays at either edge of a trip pairing when vacation starts or ends within 3 days of the pairing boundary — the company cannot effectively utilize you for those days. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction.</li>
+                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts, ≤3 Award Days at one edge of one trip) to find the position that maximizes effective days off. <em>Vacation workdays</em> are trip days covered by vacation. The best play is a line where the vacation falls entirely inside one trip pairing: slide it so exactly 3 trip workdays remain <em>after</em> the vacation — those become <em>Award days</em> (7.D.7), and the single day immediately <em>before</em> the vacation comes off automatically (25.K.3.a LOC), for up to <strong>4 extra days off</strong> beyond the vacation. (Additional workdays further ahead of the vacation stay on your bidline at the Company's discretion, so they aren't counted.) The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction.</li>
                     <li><strong>Vacation adjustments Crew Planning applies automatically</strong> — Per LOC on 7.D.9 (May 2024) the Company automatically returns you to base no later than 0701z on the workday before your vacation and schedules R-1 (Home Reserve) on the first workday after your vacation ends (unless you opt out via Bidding by 1200z on the 20th). These are on top of the printed schedule, so your <em>actual</em> days off around vacation are usually one greater on each side than what the app shows from the bidline PDF.</li>
                     <li><strong>Early-arrival flag (0700z rule)</strong> — Atlas treats any day whose trip duty ends before 0700z as a Day Off. If your last vacation day happens to be the day a trip pairing arrives before 0700z, check the box under the vacation dates. This changes the classification from "fully conflicted" to "partially conflicted", which under 7.D.2.d restricts the slide to positions that abut a Day Off. Without this flag the app assumes your line's PDF X-markers are the complete off-day picture.</li>
                     <li><strong>60-day lines</strong> — Results are shown per bid period (BP1 / BP2) so you can see exactly which period each conflict affects.</li>
@@ -1621,7 +1621,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.9.1';
+        const APP_VERSION   = '1.10.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2733,14 +2733,16 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 for (const ci of covered) {
                     vacWorkdays += Math.round((ci.end - ci.start) / 86400000) + 1;
                 }
-                // Uncovered workdays at clipped trip edges: leading edge is 25.K.3.a LOC
-                // (mandatory, uncapped); trailing edge is the 7.D.7 Award Days election (≤3).
+                // Uncovered workdays at clipped trip edges. Leading edge is the 25.K.3.a
+                // LOC: only the SINGLE day immediately before the vacation is a guaranteed
+                // Day Off (days further left stay on the bidline at Company discretion).
+                // Trailing edge is the 7.D.7 Award Days election, capped at 3.
                 const firstStart = covered[0].start;
                 const lastEnd    = covered[covered.length - 1].end;
                 const daysBefore = firstStart > tStart ? Math.round((firstStart - tStart) / 86400000) : 0;
                 const daysAfter  = lastEnd    < tEnd   ? Math.round((tEnd - lastEnd)      / 86400000) : 0;
-                locDaysOff += daysBefore;
-                const aB = (daysAfter > 0 && daysAfter <= 3) ? daysAfter : 0;
+                locDaysOff += daysBefore > 0 ? 1 : 0;
+                const aB = Math.min(3, Math.max(0, daysAfter));
                 awardDays = Math.max(awardDays, aB);
             }
             return { vacWorkdays, awardDays, locDaysOff };
@@ -2888,45 +2890,48 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays,
         // effectiveDaysOff and the award-day/LOC range(s) so downstream (filter, display) can use them.
         function evalVacPosition(slideStart, slideEnd, trips, naturalOff) {
-            let awardDays = 0;
             let vacWorkdays = 0;
-            let locDaysOff = 0;      // 25.K.3.a LOC — mandatory pre-vacation trip truncation
-            let awardRange = null;   // {start, end, side: 'after'} — single set per CBA 7.D.7
-            const locRanges = [];
+            const isWork = (d) => trips.some(t => d >= t.start && d <= t.end);
 
+            // Days covered by vacation within a trip (all days in a trip are workdays)
             for (const trip of trips) {
                 if (slideStart > trip.end || slideEnd < trip.start) continue;
-
-                // Days covered by vacation within this trip (all days in a trip are workdays)
                 const overlapStart = slideStart > trip.start ? slideStart : trip.start;
                 const overlapEnd   = slideEnd   < trip.end   ? slideEnd   : trip.end;
                 if (overlapStart <= overlapEnd) {
                     vacWorkdays += daysBetween(overlapStart, overlapEnd) + 1;
                 }
+            }
 
-                const daysBefore = slideStart > trip.start ? daysBetween(trip.start, slideStart) : 0;
-                const daysAfter  = slideEnd   < trip.end   ? daysBetween(slideEnd,  trip.end)    : 0;
+            // 25.K.3.a LOC: only the SINGLE day immediately before the vacation is a
+            // guaranteed Day Off (or deadhead home), and only when it is a scheduled
+            // workday. Days further to the left stay on the awarded bidline at the
+            // Company's discretion — a shorter pairing (e.g. MIA-BOG-MIA) can be
+            // substituted — so they are NOT credited as days off.
+            let locDaysOff = 0;
+            const locRanges = [];
+            const locDay = addDays(slideStart, -1);
+            if (isWork(locDay)) {
+                locDaysOff = 1;
+                locRanges.push({ start: new Date(locDay), end: new Date(locDay) });
+            }
 
-                // LOC 25.K.3.a: the portion of a Trip Pairing preceding an overlapping vacation
-                // is mandatorily converted to Days Off (or deadhead) by the Company — uncapped,
-                // automatic, and independent of the 7.D.7 Award Days election below.
-                if (daysBefore > 0) {
-                    locDaysOff += daysBefore;
-                    locRanges.push({ start: new Date(trip.start), end: addDays(trip.start, daysBefore - 1) });
-                }
-
-                // 7.D.7 Award Days: ≤3 workdays at the trailing edge only. 25.K.3.a already
-                // covers the leading edge above, so the one-set-per-vacation election is
-                // reserved for the side with no automatic CBA remedy.
-                // Award days may not fall in Article 7 restricted weeks.
-                const postStart = addDays(slideEnd, 1);
-                const awardB = (daysAfter  > 0 && daysAfter  <= 3 &&
-                                restrictedWeeksIn(postStart, trip.end).size === 0) ? daysAfter  : 0;
-                if (awardB > awardDays) {
-                    awardDays  = awardB;
-                    awardRange = { start: addDays(trip.end, -(awardB - 1)),
-                                   end:   new Date(trip.end),
-                                   side:  'after' };
+            // 7.D.7 Award Days: up to 3 workdays at the trailing edge, taken
+            // immediately after the vacation. The maximising strategy is to slide the
+            // vacation so exactly 3 trip workdays remain after it. Award days may not
+            // fall in an Article 7 restricted week.
+            let awardDays = 0;
+            let awardRange = null;
+            for (let ad = addDays(slideEnd, 1); awardDays < 3 && isWork(ad); ad = addDays(ad, 1)) {
+                awardDays++;
+            }
+            if (awardDays > 0) {
+                const awardStart = addDays(slideEnd, 1);
+                const awardEnd   = addDays(slideEnd, awardDays);
+                if (restrictedWeeksIn(awardStart, awardEnd).size > 0) {
+                    awardDays = 0;
+                } else {
+                    awardRange = { start: awardStart, end: awardEnd, side: 'after' };
                 }
             }
 
@@ -2968,16 +2973,16 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         //   7.D.2.b — anchor: at least one original vacation day remains
         //   7.D.2.c — partial-conflict cap: cannot slide past first full-conflict position
         //   7.D.2.d — partial-conflict abut: slid position must abut a Day Off on ≥1 side.
-        //     Evaluated PER CANDIDATE (r.vacWorkdays < vacLength at that position), not just
-        //     from the original award — otherwise a fully-conflicted original could slide onto
-        //     an unrelated, barely-overlapping trip to harvest its uncapped 25.K.3.a leading
-        //     edge without ever satisfying an abut requirement.
+        //     Evaluated PER CANDIDATE (r.vacWorkdays < vacLength at that position).
         //   7.D.2.f.ii — 30/60-day lines may slide into subsequent Bid Month (past schedule end)
         //   7.D.4   — fully conflicted may slide either direction (with anchor)
         //   7.D.5   — restricted weeks: may slide OUT of, but NOT INTO
-        //   7.D.7   — Award Days: ≤3 workdays at ONE edge of ONE trip pairing (trailing edge only)
-        //   25.K.3.a — LOC: leading edge of a trip pairing preceding an overlapping vacation is
-        //     mandatorily converted to Days Off/deadhead — uncapped, automatic, stacks with 7.D.7
+        //   7.D.7   — Award Days: ≤3 workdays at the trailing edge, taken immediately after the
+        //     vacation. Best practice: slide so exactly 3 trip workdays remain after the vacation.
+        //   25.K.3.a — LOC: only the SINGLE day immediately before the vacation converts to a Day
+        //     Off/deadhead. Days further left stay on the bidline at Company discretion (a shorter
+        //     pairing may be substituted), so they are not credited. Net optimal bonus = 1 (LOC) +
+        //     3 (Award) = 4 days off beyond the vacation itself.
         //
         // opts:
         //   lastVacDayEffectivelyOff — bool. See Fix A: user asserts trip arrival on the last
@@ -3056,11 +3061,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // 7.D.2.d abut rule: evaluated per candidate, not just from the original award.
                 // A candidate that is ITSELF partially conflicted (mixes real workdays with
                 // already-off days) must abut a Day Off on ≥1 side — regardless of whether the
-                // original award was fully or partially conflicted. Without this, a fully
-                // conflicted original vacation could slide onto a barely-overlapping, unrelated
-                // trip purely to harvest the uncapped 25.K.3.a leading-edge credit (locDaysOff)
-                // for that trip's entire preceding length, without ever satisfying the abut
-                // requirement that position would otherwise need on its own merits.
+                // original award was fully or partially conflicted.
                 const candPartial = r.vacWorkdays > 0 && r.vacWorkdays < vacLength;
                 if (candPartial) {
                     const dayBefore = addDays(sStart, -1);
@@ -3072,16 +3073,18 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 positions.push({ sStart, sEnd, r, direction, distanceFromOrig: Math.abs(cmp) });
             }
 
-            // Fix D: explicit multi-key tiebreak.
+            // Tiebreak:
             //   1) higher effectiveDaysOff wins
-            //   2) higher awardDays wins
-            //   3) closer to original wins (least surprising)
-            //   4) earlier position wins (stable/deterministic)
+            //   2) on a tie, the LATEST position wins — this abuts the vacation to the
+            //      trailing 7.D.7 Award Days and pushes the remaining workdays to the
+            //      front of the trip, i.e. the best-practice placement that yields the
+            //      largest single contiguous block off. (Days Desired Off is enforced as
+            //      an absolute pre-filter, so a surviving line already keeps those dates
+            //      off regardless of where inside the anchor the block lands.)
             const rank = (a, b) => {
                 if (a.r.effectiveDaysOff !== b.r.effectiveDaysOff) return b.r.effectiveDaysOff - a.r.effectiveDaysOff;
-                if (a.r.awardDays        !== b.r.awardDays)        return b.r.awardDays - a.r.awardDays;
-                if (a.distanceFromOrig   !== b.distanceFromOrig)   return a.distanceFromOrig - b.distanceFromOrig;
-                return a.sStart - b.sStart;
+                if (a.sStart.getTime()   !== b.sStart.getTime())   return b.sStart - a.sStart;
+                return 0;
             };
 
             // Guaranteed baseline: original position (may fail 7.D.5 nothing — sanity fallback only)
@@ -3094,7 +3097,17 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             }
 
             positions.sort(rank);
-            const best = positions[0];
+            // Only recommend a slide when some position STRICTLY beats staying put.
+            // If the awarded position already ties the max effective days off, don't
+            // churn the dates — a slide that gains nothing (e.g. vacation entirely on
+            // off-days, or a trip fully consumed either way) should read "no slide".
+            const originPos = positions.find(p => p.direction === 'origin') || {
+                sStart: new Date(vacStart), sEnd: new Date(vacEnd),
+                r: originEval, direction: 'origin', distanceFromOrig: 0
+            };
+            const best = positions[0].r.effectiveDaysOff > originEval.effectiveDaysOff
+                ? positions[0]
+                : originPos;
 
             // Fix 2b: best alternative on the OPPOSITE side of the anchor from `best`.
             // Surface it when it comes within 1 effective day off of the winner (close call).
@@ -3757,10 +3770,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
                 }
 
-                // Vacation edges: the leading edge of a trip pairing that precedes an
-                // overlapping vacation is mandatorily converted to Days Off under 25.K.3.a
-                // (uncapped, automatic). The trailing edge only gets ≤3 workdays via the
-                // separate 7.D.7 Award Days election.
+                // Vacation edges: under 25.K.3.a only the SINGLE day immediately before the
+                // vacation comes off (days further left stay on the bidline at Company
+                // discretion). The trailing edge draws up to 3 workdays via the 7.D.7 Award
+                // Days election, taken immediately after the vacation.
                 if (hasVac) {
                     const firstEx = merged[0];
                     const lastEx  = merged[merged.length - 1];
@@ -3769,16 +3782,14 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const daysAfter  = lastEx.end < trip.end
                         ? Math.round((trip.end.getTime() - lastEx.end.getTime()) / 86400000) : 0;
                     if (daysBefore > 0) {
-                        merged.unshift({
-                            start: new Date(trip.start),
-                            end:   new Date(trip.start.getTime() + (daysBefore - 1) * 86400000)
-                        });
+                        const locDay = new Date(firstEx.start.getTime() - 86400000);
+                        merged.unshift({ start: locDay, end: new Date(locDay) });
                     }
-                    const awardB = (daysAfter > 0 && daysAfter <= 3) ? daysAfter : 0;
+                    const awardB = Math.min(3, Math.max(0, daysAfter));
                     if (awardB > 0) {
                         merged.push({
-                            start: new Date(trip.end.getTime() - (awardB - 1) * 86400000),
-                            end:   new Date(trip.end)
+                            start: new Date(lastEx.end.getTime() + 86400000),
+                            end:   new Date(lastEx.end.getTime() + awardB * 86400000)
                         });
                     }
                     // Re-sort and collapse after edge-trim additions

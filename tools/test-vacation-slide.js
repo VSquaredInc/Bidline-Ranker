@@ -336,7 +336,7 @@ function assertNull(name, actual) {
     `chose ${fmt(r.chosenSlideStart)}`);
 })();
 
-// ─── FIX 2a / 25.K.3.a — LOC (leading edge) vs. Award Days (trailing edge) ──
+// ─── 25.K.3.a LOC (1 day) vs. 7.D.7 Award Days (≤3, trailing) ───────────────
 // Uses evalVacPosition directly (not computeVacationScore) to pin down a specific
 // slide position — computeVacationScore's own search can find an equally-scoring
 // alternate position, which would obscure what a single position actually credits.
@@ -344,34 +344,33 @@ function assertNull(name, actual) {
   const trips = [ trip(2026, 7, 20, 7, 28) ]; // 9-day trip: 7/20-7/28
 
   // Leading-edge case: window 7/22-7/28 covers the LAST 7 days of the trip, leaving
-  // 2 workdays before (7/20, 7/21). Under 25.K.3.a that's a mandatory, uncapped LOC
-  // conversion — NOT a 7.D.7 Award Days election.
+  // 2 workdays before (7/20, 7/21). Under 25.K.3.a ONLY the single day immediately
+  // before the vacation (7/21) is a guaranteed Day Off — 7/20 stays on the bidline.
   const r = slide.evalVacPosition(D(2026,7,22), D(2026,7,28), trips, 0);
-  check('2a-1 locRanges array populated for leading-edge trim',
-    Array.isArray(r.locRanges) && r.locRanges.length > 0,
+  check('2a-1 locRanges array populated for the 1-day leading trim',
+    Array.isArray(r.locRanges) && r.locRanges.length === 1,
     `locRanges = ${JSON.stringify(r.locRanges)}`);
-  check('2a-2 locDaysOff = 2 (7/20-7/21, uncapped 25.K.3.a conversion)',
-    r.locDaysOff === 2, `locDaysOff = ${r.locDaysOff}`);
+  check('2a-2 locDaysOff = 1 (only 7/21, the day immediately before the vacation)',
+    r.locDaysOff === 1, `locDaysOff = ${r.locDaysOff}`);
   check('2a-3 no 7.D.7 award range on this trip (no trailing edge)',
     r.awardRange === null && r.awardDays === 0,
     `awardRange = ${JSON.stringify(r.awardRange)}, awardDays = ${r.awardDays}`);
 
   // Trailing-edge case: window 7/20-7/26 covers the FIRST 7 days, leaving 2 workdays
-  // after — no automatic CBA remedy on this side, so it draws the 7.D.7 election.
+  // after — the 7.D.7 election (min(3, trailing) = 2). No workday before 7/20 → LOC 0.
   const r2 = slide.evalVacPosition(D(2026,7,20), D(2026,7,26), trips, 0);
   check('2a-4 trailing edge uses AWRD (7.D.7), not LOC',
     r2.awardRange && r2.awardRange.side === 'after' && r2.awardDays === 2,
     `awardRange = ${JSON.stringify(r2.awardRange)}, awardDays = ${r2.awardDays}`);
-  check('2a-5 trailing edge: locDaysOff = 0 (no leading edge on this trip)',
+  check('2a-5 trailing edge: locDaysOff = 0 (no workday immediately before 7/20)',
     r2.locDaysOff === 0, `locDaysOff = ${r2.locDaysOff}`);
 
-  // Stacking case: window 7/22-7/25 lands in the MIDDLE of the trip, leaving workdays
-  // on both edges. The leading 2 days are free under 25.K.3.a; the trailing 3 days
-  // draw the one 7.D.7 election. Both must be credited simultaneously (the bug this
-  // fix addresses: previously only the larger of the two sides was ever credited).
+  // Stacking case: window 7/22-7/25 lands in the MIDDLE of the trip. The 1 leading day
+  // (7/21) is the 25.K.3.a LOC; the trailing 3 (7/26-7/28) draw the 7.D.7 election.
+  // Both stack → +4 days off beyond the vacation.
   const r3 = slide.evalVacPosition(D(2026,7,22), D(2026,7,25), trips, 0);
-  check('2a-6 stacking: leading LOC and trailing AWRD both credited at once',
-    r3.locDaysOff === 2 && r3.awardDays === 3 && r3.awardRange.side === 'after',
+  check('2a-6 stacking: 1 LOC + 3 AWRD both credited at once (+4)',
+    r3.locDaysOff === 1 && r3.awardDays === 3 && r3.awardRange.side === 'after',
     `locDaysOff=${r3.locDaysOff}, awardDays=${r3.awardDays}, awardRange=${JSON.stringify(r3.awardRange)}`);
 })();
 
@@ -392,37 +391,32 @@ function assertNull(name, actual) {
     `chose ${fmt(r.chosenSlideStart)}`);
 })();
 
-// ─── 7.D.2.d per-candidate abut — closes the 25.K.3.a "graze an unrelated trip" ────
-// exploit reported 2026-07-15: a fully-conflicted original vacation must not be able to
-// slide onto a position that is ITSELF partially conflicted (mixing real workdays from an
-// unrelated trip with already-off days) without satisfying its own abut requirement. Before
-// the fix, sliding to just barely clip the last day of an unrelated earlier trip harvested
-// that trip's entire (uncapped) 25.K.3.a leading-edge credit and out-scored the legitimate
-// resolution of the actually-conflicting trip.
-(function testPerCandidateAbut() {
-  // Trip A: 1/3-1/9. Off 1/10-1/11. Trip B: 1/12-1/20 (originally fully-conflicted vacation
-  // sits here). Off 1/21-1/23. Trip C: 1/24-1/28. Off 1/29-1/30.
-  const trips = [
-    trip(2026, 1, 3, 1, 9),
-    trip(2026, 1, 12, 1, 20),
-    trip(2026, 1, 24, 1, 28),
-  ];
-  const datesOff = [1, 2, 10, 11, 21, 22, 23, 29, 30].map(d => D(2026, 1, d));
-  const scheduleEnd = D(2026, 2, 28);
-  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, D(2026,1,12), D(2026,1,18));
+// ─── Canonical +4 case — real line MIA 744 CA 2965 (Aug 2026) ───────────────
+// One 15-day pairing Aug 2-16; vacation awarded Aug 9-15 (fully inside the trip);
+// natural off = Aug 1 + Aug 17-31 (16 days). Correct model: slide so exactly 3 trip
+// workdays remain after the vacation (Aug 14-16 → Award), the day before becomes the
+// single LOC day (Aug 6), giving +4 days off beyond the vacation. Best position is the
+// LATEST that still trails 3 award days: Aug 7-13.
+(function testCanonicalPlusFour() {
+  const trips = [ trip(2026, 8, 2, 8, 16) ];
+  const datesOff = [ D(2026, 8, 1) ];
+  for (let d = 17; d <= 31; d++) datesOff.push(D(2026, 8, d));
+  const scheduleEnd = D(2026, 9, 1);
+  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, D(2026,8,9), D(2026,8,15));
 
-  check('abut-1 does NOT slide to 1/9-1/15 (grazes Trip A tail for an unearned LOC windfall)',
-    !slide.sameDay(r.chosenSlideStart, D(2026, 1, 9)),
+  check('p4-1 chosen slide is Aug 7 (vacation abuts the 3 trailing Award Days)',
+    slide.sameDay(r.chosenSlideStart, D(2026, 8, 7)),
     `chose ${fmt(r.chosenSlideStart)}`);
-  check('abut-2 chosen position properly abuts a Day Off (1/11-1/17: abuts the 1/10-1/11 gap)',
-    slide.sameDay(r.chosenSlideStart, D(2026, 1, 11)),
-    `chose ${fmt(r.chosenSlideStart)}`);
-  check('abut-3 effectiveDaysOff is the legitimate max (18), not the exploited 20',
-    r.effectiveDaysOff === 18, `effectiveDaysOff = ${r.effectiveDaysOff}`);
-  check('abut-4 locDaysOff = 0 at the chosen position (no unrelated-trip windfall)',
-    r.locDaysOff === 0, `locDaysOff = ${r.locDaysOff}`);
-  check('abut-5 awardDays = 3 (legitimate trailing-edge 7.D.7 use)',
+  check('p4-2 locDaysOff = 1 (only the single day before the vacation, Aug 6)',
+    r.locDaysOff === 1, `locDaysOff = ${r.locDaysOff}`);
+  check('p4-3 awardDays = 3 (Aug 14-16 trailing 7.D.7 election)',
     r.awardDays === 3, `awardDays = ${r.awardDays}`);
+  check('p4-4 bonus beyond vacation = 4 days (1 LOC + 3 Award)',
+    r.locDaysOff + r.awardDays === 4, `bonus = ${r.locDaysOff + r.awardDays}`);
+  check('p4-5 effectiveDaysOff = 27 (16 natural + 7 vacation + 1 LOC + 3 Award)',
+    r.effectiveDaysOff === 27, `effectiveDaysOff = ${r.effectiveDaysOff}`);
+  check('p4-6 the whole month is NOT eliminated (pilot still works Aug 2-5)',
+    r.effectiveDaysOff < 31, `effectiveDaysOff = ${r.effectiveDaysOff}`);
 })();
 
 // ─── Regression: original vacation on all off-days → no shift, no crash ─────
@@ -456,7 +450,7 @@ function assertNull(name, actual) {
 
 // ─── Report ─────────────────────────────────────────────────────────────────
 console.log('\n══════════════════════════════════════════════════════════════');
-console.log(' VACATION SLIDE REGRESSION TEST — v1.8.0');
+console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / 3-day Award model');
 console.log('══════════════════════════════════════════════════════════════\n');
 for (const c of results.cases) {
   const icon = c.ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
