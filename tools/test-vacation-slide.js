@@ -106,6 +106,7 @@ const SLIDE_FNS = [
   'isEffectiveOff',
   'restrictedWeeksIn',
   'evalVacPosition',
+  'evalVacContribForPeriod',
   'computeVacationScore',
 ];
 
@@ -448,9 +449,71 @@ function assertNull(name, actual) {
     r.chosenSlideStart instanceof Date);
 })();
 
+// ─── 7.D.7 Award Days are a CLIFF, not a cap (reported by ANC scheduler) ────
+// The election exists only when 3 or fewer workdays remain after the vacation.
+// With 4+ remaining there are no award days at all: the first day back is R-1
+// home reserve (Art 31.B, counted as a day off) and the rest are flown as
+// published or reassigned as secondary. Previously the code returned min(3, run),
+// silently crediting 3 phantom days off on every long trailing run.
+(function testAwardCliff() {
+  const trips = [ trip(2026, 9, 10, 9, 24) ];   // 15-day pairing Sept 10-24
+
+  // Exactly 3 trailing workdays (Sept 22-24) → full 7.D.7 election.
+  const r3 = slide.evalVacPosition(D(2026,9,15), D(2026,9,21), trips, 0);
+  check('c1 trailing run = 3 → awardDays 3, no R-1',
+    r3.awardDays === 3 && r3.r1DaysOff === 0,
+    `awardDays=${r3.awardDays}, r1DaysOff=${r3.r1DaysOff}`);
+
+  // One day earlier → 4 trailing workdays → election gone, R-1 instead.
+  const r4 = slide.evalVacPosition(D(2026,9,14), D(2026,9,20), trips, 0);
+  check('c2 trailing run = 4 → awardDays 0, R-1 = 1 (the cliff)',
+    r4.awardDays === 0 && r4.r1DaysOff === 1,
+    `awardDays=${r4.awardDays}, r1DaysOff=${r4.r1DaysOff}`);
+  check('c3 the R-1 day is the day immediately after the vacation (Sept 21)',
+    r4.r1Ranges.length === 1 && slide.sameDay(r4.r1Ranges[0].start, D(2026,9,21)),
+    `r1Ranges = ${JSON.stringify(r4.r1Ranges)}`);
+  check('c4 crossing the cliff costs exactly 2 effective days off (3 award → 1 R-1)',
+    r3.effectiveDaysOff - r4.effectiveDaysOff === 2,
+    `${r3.effectiveDaysOff} vs ${r4.effectiveDaysOff}`);
+
+  // The scheduler's reported case: vacation Sept 6-12, line 1233 ANC CA.
+  // 7.D.2.c caps the slide at Sept 10 (first full-conflict day); 8 workdays then
+  // trail the vacation, so the old code wrongly reported 3 award days.
+  const datesOff = [];
+  for (let d = 1; d <= 9; d++)  datesOff.push(D(2026,9,d));
+  for (let d = 25; d <= 30; d++) datesOff.push(D(2026,9,d));
+  const anc = slide.computeVacationScore(trips, datesOff, D(2026,10,1), D(2026,9,6), D(2026,9,12));
+  check('c5 ANC 1233: slide Sept 10-16 as before',
+    slide.sameDay(anc.chosenSlideStart, D(2026,9,10)) && slide.sameDay(anc.chosenSlideEnd, D(2026,9,16)),
+    `${fmt(anc.chosenSlideStart)} -> ${fmt(anc.chosenSlideEnd)}`);
+  check('c6 ANC 1233: awardDays = 0 (8 workdays trail, not 3)',
+    anc.awardDays === 0, `awardDays = ${anc.awardDays}`);
+  check('c7 ANC 1233: R-1 = 1 and effectiveDaysOff = 23 (was a phantom 25)',
+    anc.r1DaysOff === 1 && anc.effectiveDaysOff === 23,
+    `r1DaysOff=${anc.r1DaysOff}, effectiveDaysOff=${anc.effectiveDaysOff}`);
+})();
+
+// ─── The cliff must be measured on the UNCLIPPED trip, not the period slice ──
+// A trip crossing the BP1/BP2 boundary leaves few days inside BP1 but a long run
+// overall. Measuring the run against the clipped end would fake a short trailing
+// run and hand back award days that were never earned.
+(function testCliffAcrossPeriodBoundary() {
+  const trips  = [ trip(2026, 8, 28, 9, 10) ];        // Aug 28 - Sep 10
+  const vac    = [ { start: D(2026,8,25), end: D(2026,8,30) } ];
+  const bp1End = D(2026, 8, 31);                      // BP1 ends Aug 31
+
+  const bp1 = slide.evalVacContribForPeriod(trips, vac, null, bp1End);
+  check('c8 period-clipped trip: no award days (real trailing run is 11, not 1)',
+    bp1.awardDays === 0, `awardDays = ${bp1.awardDays}`);
+  check('c9 period-clipped trip: R-1 day credited to BP1 (Aug 31 is inside BP1)',
+    bp1.r1DaysOff === 1, `r1DaysOff = ${bp1.r1DaysOff}`);
+  check('c10 period-clipped trip: vacation workdays still attributed (Aug 28-30)',
+    bp1.vacWorkdays === 3, `vacWorkdays = ${bp1.vacWorkdays}`);
+})();
+
 // ─── Report ─────────────────────────────────────────────────────────────────
 console.log('\n══════════════════════════════════════════════════════════════');
-console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / 3-day Award model');
+console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / ≤3 Award / R-1 model');
 console.log('══════════════════════════════════════════════════════════════\n');
 for (const c of results.cases) {
   const icon = c.ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';

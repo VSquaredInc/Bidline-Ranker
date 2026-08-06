@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.10.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v19` (in service-worker.js)  
+**Current version:** 1.11.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v20` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -170,7 +170,8 @@ Implemented from Atlas Article 7.pdf (governing source):
 | 7.D.2.d | Partially conflicted vacation must abut Days-Off (evaluated per candidate slide position, not just the original award — see below) |
 | 7.D.4 | Fully conflicted vacation may slide in either direction (with anchor) |
 | 7.D.5 | Exempt weeks — company may designate up to 4 (max 1/month); sliding OUT is explicitly permitted |
-| 7.D.7 | Award Days — up to 3 workdays at the trailing edge, taken immediately after the vacation; only one set per vacation period |
+| 7.D.7 | Award Days — up to 3 workdays at the trailing edge, taken immediately after the vacation; only one set per vacation period. **Available only when ≤3 workdays actually trail the vacation** — see the cliff below |
+| 31.B | R-1 "Home Reserve" — when 4+ workdays trail the vacation the 7.D.7 election is unavailable and the first day back is R-1; counted as a day off (Crew Member is at home, merely contactable) |
 | 25.K.3.a | LOC — only the SINGLE day immediately before the vacation converts to a Day Off (or deadhead); days further left stay on the awarded bidline at Company discretion and are not credited |
 
 **Source verification:** Atlas Article 25.pdf does NOT mention exempt weeks (25.K covers vacation bid period mechanics only). The IBT Teaching Topic (Vacation Slide.pdf, May 2024) is a user-friendly summary and source for the exempt weeks list and Award Days/exempt weeks intersection — but is NOT the governing CBA. **25.K.3.a** is clarified by a separate Letter of Clarification (`Vacation/Altas LOC Article 25.K.3.a.pdf`, signed 2023-02-27): the portion of a Trip Pairing preceding an overlapping vacation is converted to Days Off or a deadhead home, at the Company's option.
@@ -179,6 +180,14 @@ Implemented from Atlas Article 7.pdf (governing source):
 - **25.K.3.a LOC = exactly 1 day** — only the single day immediately *before* the vacation is a guaranteed Day Off (or deadhead). Days further left stay on the awarded bidline at the Company's discretion (a shorter pairing, e.g. MIA-BOG-MIA, can be substituted), so they are **not** credited.
 - **7.D.7 Award Days = min(3, trailing workdays)** — up to 3 workdays taken immediately *after* the vacation. Best practice: slide the vacation so exactly 3 trip workdays remain after it.
 - **Net optimal bonus = 1 (LOC) + 3 (Award) = 4 days off** beyond the vacation itself. The maximising strategy is a line where the vacation falls entirely inside one trip pairing.
+
+**Award Days are a CLIFF, not a cap (v1.11.0, implemented 2026-08-05) — corrects the `min(3, …)` above.** Reported by an ANC pilot on the scheduling committee against line 1233 ANC CA (vacation Sept 6-12, trip Sept 10-24): the app slid to Sept 10-16 and claimed 3 award days, but **8** workdays trailed the vacation. The 7.D.7 election is "up to 3 workdays at the trailing edge" — it exists only when 3 or fewer workdays *actually* remain, not as the first 3 of a longer run. Correct mechanics per the domain owner:
+- **≤3 trailing workdays** → all of them are Award Days (unchanged).
+- **≥4 trailing workdays** → **no** award days. The first day back is **R-1 home reserve** (Article 31.B), counted as a day off; the remaining days are either flown as published (if the pairing transits base after the R-1) or reassigned as secondary. Both are workdays, so neither adds days off.
+- Crossing the cliff costs **2** effective days off (3 award → 1 R-1), not 3.
+- **Deliberately not modelled:** a pairing that transits base after the R-1, or a secondary assignment shorter than the published trip, can yield further days off. That depends on Company assignment history not available to the app, so it is left to the individual pilot — stated explicitly in the in-app help text.
+
+Why it mattered beyond the one line: the old `min(3, …)` applied a **uniform phantom +3 to every position**, which made the optimizer blind to the distinction that matters most — a line where the vacation can be placed to leave ≤3 trailing workdays is genuinely worth more than one leaving 8, and both scored identically. Applied in `evalVacPosition`, `evalVacContribForPeriod` (measuring the run against the **unclipped** trip end so a BP1/BP2 boundary can't fake a short run) and `computeModifiedTrips`. New fields `r1DaysOff` / `r1Ranges` flow through the BP1/BP2 merge, the desired-dates-off filter, the Optimizer column (`R-1: 1d`) and CSV export. Regression tests `c1`…`c10` in `tools/test-vacation-slide.js` pin the cliff, the ANC case, and the period-boundary case (53 tests total).
 
 Applied identically in `evalVacPosition`, `evalVacContribForPeriod`, and `computeModifiedTrips`. **Tiebreak:** on an equal-effective-days-off tie, the *latest* slide wins (vacation abuts the trailing 3 award days, work pushed to the front); a slide is only recommended when it *strictly* beats staying at the awarded position (no churn). Verified end-to-end on MIA 744 CA line 2965 (Aug 2026): trip Aug 2–16, vacation Aug 9–15 → slide **Aug 7–13**, LOC 1 + Award 3, EffOff **27** (was the buggy 31), pilot still works Aug 2–5. Regression tests `p4-1`…`p4-6` in `tools/test-vacation-slide.js` pin this case.
 
@@ -254,7 +263,11 @@ Content is real only if it matches: airport pattern (3-letter, not in excludeCod
 
 ## Beta Expiry
 
-Currently set to `2026-08-01` in ABR.html (`DOMContentLoaded` handler). Covers May, June, and July bid cycles. Extend before August when ready.
+Currently set to `2027-01-01` in ABR.html (`DOMContentLoaded` handler). Covers the Aug–Dec 2026 bid cycles.
+
+**It lapsed once — 2026-08-01 passed unnoticed and the live app showed "Beta Expired" to every user for 5 days (Aug 1–5, 2026), caught only because usage analysis surfaced 40 opens with zero rankings.** Early August is the dead zone of the bid cycle so the cost was ~21 users, but the same lapse on a posting day would take out the entire cycle (Jul 15, 2026: 401 users, 341 rankings in one day). Never let the expiry date fall near the 15th, and check it before each cycle.
+
+**PWA update lag — the expiry cannot be fixed for a returning user on their first launch.** The service worker is cache-first with no revalidation, so a returning visitor gets the old cached `ABR.html` (and therefore the old expiry check) on the launch after any deploy; the new version appears on the *next* launch. Measured on the v1.10.0 deploy: of 173 users, 78 saw a stale version first, and of the 16 who upgraded, 11 needed 1 more open, 2 needed 2, and 3 needed 3. Deploy well ahead of the 15th so users burn the stale launch during the quiet period. A network-first fetch handler for the HTML would remove this permanently — proposed, not yet implemented.
 
 ---
 
