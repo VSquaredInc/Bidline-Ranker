@@ -187,14 +187,15 @@ async function main() {
   const localIdx = process.argv.indexOf('--local');
   if (localIdx >= 0) {
     const folder = path.resolve(process.argv[localIdx + 1] || '');
-    if (!fs.existsSync(folder)) { console.error(`--local folder not found: ${folder}`); process.exit(2); }
+    if (!fs.existsSync(folder)) { console.error(`--local folder not found: ${folder}`); process.exitCode = 2; return; }
     console.log(`Running in LOCAL mode against ${folder} (no portal fetch).`);
     const files = await loadLocal(parsers, folder);
     await reviewOne(parsers, appVersion, path.basename(folder), files, outDir, report);
     report.summary();
     writeSummary(outDir, report);
     console.log(`\nReport + dataset written under: ${path.relative(REPO_ROOT, outDir)}`);
-    process.exit(report.rows.some(r => r.level === 'err') ? 1 : 0);
+    process.exitCode = report.rows.some(r => r.level === 'err') ? 1 : 0;
+    return;
   }
 
   // Portal mode — needs credentials.
@@ -202,12 +203,14 @@ async function main() {
   if (!creds.username || !creds.password) {
     console.error('Set ATLAS_USERNAME and ATLAS_PASSWORD (env / GitHub Actions secrets) for portal mode,');
     console.error('or use:  node portal-review.js --local <folder>');
-    process.exit(2);
+    process.exitCode = 2;
+    return;
   }
 
   const AIRCRAFT_BASES = readAircraftBases(ABR_HTML);
   console.log(`Portal: ${portal.endpoint()}`);
-  let listed = 0, listFailed = 0;
+  let listed = 0, listFailed = 0, authFailed = false;
+  sweep:
   for (const aircraft of Object.keys(AIRCRAFT_BASES)) {
     for (const base of AIRCRAFT_BASES[aircraft]) {
       for (const pos of POSITIONS) {
@@ -218,7 +221,17 @@ async function main() {
             listFailed++;
             const level = fetched.status === 404 ? 'warn' : 'err';
             report.combo(label, level, `fetch failed (${fetched.status}): ${fetched.error}`);
-            if (fetched.status === 401) { console.error('Authentication failed — stopping.'); break; }
+            // A 401 is a credential problem, not a per-combo one — every remaining
+            // combo would fail identically. Abandon the WHOLE sweep: continuing
+            // fires a rejected login per combo at the real Atlas account and can
+            // trip a lockout. (Until 2026-08-15 this `break` was unlabelled, so it
+            // left only the POSITIONS loop and kept going: the 2026-08-15 13:30Z
+            // run logged "stopping" 12 times and silently skipped every FO combo.)
+            if (fetched.status === 401) {
+              authFailed = true;
+              console.error('Authentication failed — abandoning the sweep (no further login attempts).');
+              break sweep;
+            }
             continue;
           }
           listed++;
@@ -235,11 +248,28 @@ async function main() {
   console.log(`\nReview summary: ${path.relative(REPO_ROOT, path.join(outDir, 'review-summary.json'))}`);
   console.log(`Parsed datasets (PRIVATE, not uploaded from CI): ${path.relative(REPO_ROOT, path.join(outDir, 'data'))}`);
 
-  // Fail the job if anything errored, or if the whole listing collapsed
-  // (a sign the folder/file-matching broke portal-wide).
+  // Fail the job if anything errored, or if the whole listing collapsed.
+  // The two causes of a collapse look identical in the counts but need opposite
+  // responses, so name the one we actually detected — reporting a credential
+  // rejection as a "folder/file-matching change" sends the reader into
+  // api/fetch-bid.js for a problem that is fixed by rotating a secret.
   const systemic = listed === 0 && listFailed > 0;
-  if (systemic) console.error('\nNo combos could be listed — likely a portal folder/file-matching change (api/fetch-bid.js).');
-  process.exit(counts.err > 0 || systemic ? 1 : 0);
+  if (authFailed) {
+    console.error('\nThe portal REJECTED THE CREDENTIALS (401 Invalid username or password).');
+    console.error('Fix: update the ATLAS_USERNAME / ATLAS_PASSWORD repository secrets');
+    console.error('     (Settings -> Secrets and variables -> Actions), then re-run this workflow.');
+    console.error('This is NOT a file-format change — no parser or api/fetch-bid.js work is implied.');
+  } else if (systemic) {
+    console.error('\nNo combos could be listed, and the credentials were accepted — so this is');
+    console.error('likely a portal folder/file-matching change (api/fetch-bid.js).');
+  }
+  // Set the code and let the event loop drain rather than process.exit()-ing.
+  // Forcing exit immediately after an HTTP request tears down undici's socket
+  // while it is still closing; on Windows that trips a libuv assertion
+  // ("!(handle->flags & UV_HANDLE_CLOSING)") and replaces the exit code with
+  // 0xC0000409, so a *failing* run reports neither 0 nor 1 and CI/callers can no
+  // longer read the result. Draining costs well under a second.
+  process.exitCode = counts.err > 0 || systemic ? 1 : 0;
 }
 
-main().catch(e => { console.error('\nUnexpected failure:', e); process.exit(2); });
+main().catch(e => { console.error('\nUnexpected failure:', e); process.exitCode = 2; });
