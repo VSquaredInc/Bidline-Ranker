@@ -46,5 +46,50 @@
     "primaryUnreadCount": 1,
     "primaryUnreadPct": 2,
     "primaryAtFloorPct": 4
+  },
+  {
+    "savedAt": "2026-08-15T05:50:28.466Z",
+    "appVersion": "1.11.0",
+    "base": "MIA",
+    "aircraft": "744",
+    "position": "CA",
+    "period": "2026-09",
+    "bidlineLineCount": 66,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 29,
+      "Primary 60-day Int": 27,
+      "Secondary 60-day": 1,
+      "Reserve AdH": 4,
+      "Reserve 60-day AdH": 5
+    },
+    "daysOffRange": [
+      13,
+      19
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "747 Lines Sep26-Sep26 Period.pdf",
+        "lineCount": 907,
+        "guaranteeNonZero": 907
+      },
+      {
+        "name": "747 Lines Sep26-Oct26 Period.pdf",
+        "lineCount": 454,
+        "guaranteeNonZero": 454
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      81.07
+    ],
+    "primaryCount": 56,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 32
   }
 ]

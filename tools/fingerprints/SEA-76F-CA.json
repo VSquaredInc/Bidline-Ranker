@@ -45,5 +45,51 @@
     "primaryUnreadCount": 0,
     "primaryUnreadPct": 0,
     "primaryAtFloorPct": 75
+  },
+  {
+    "savedAt": "2026-08-15T05:50:59.526Z",
+    "appVersion": "1.11.0",
+    "base": "SEA",
+    "aircraft": "76F",
+    "position": "CA",
+    "period": "2026-09",
+    "bidlineLineCount": 17,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary AdH": 3,
+      "Primary 60-day AdH": 3,
+      "Secondary AdH": 2,
+      "Secondary 60-day": 4,
+      "Reserve AdH": 2,
+      "Reserve 60-day AdH": 3
+    },
+    "daysOffRange": [
+      13,
+      19
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "767 Lines Sep26-Sep26 Period.pdf",
+        "lineCount": 127,
+        "guaranteeNonZero": 127
+      },
+      {
+        "name": "767 Lines Sep26-Oct26 Period.pdf",
+        "lineCount": 54,
+        "guaranteeNonZero": 54
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      82.2
+    ],
+    "primaryCount": 6,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 67
   }
 ]

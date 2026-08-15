@@ -44,5 +44,50 @@
     "primaryUnreadCount": 1,
     "primaryUnreadPct": 8,
     "primaryAtFloorPct": 31
+  },
+  {
+    "savedAt": "2026-08-15T05:50:54.113Z",
+    "appVersion": "1.11.0",
+    "base": "JFK",
+    "aircraft": "76F",
+    "position": "FO",
+    "period": "2026-09",
+    "bidlineLineCount": 26,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary AdH": 12,
+      "Secondary AdH": 3,
+      "Secondary 60-day": 4,
+      "Reserve AdH": 3,
+      "Reserve 60-day AdH": 4
+    },
+    "daysOffRange": [
+      13,
+      18
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "geometry-2026",
+    "creditFiles": [
+      {
+        "name": "767 Lines Sep26-Oct26 Period.pdf",
+        "lineCount": 54,
+        "guaranteeNonZero": 54
+      },
+      {
+        "name": "767 Lines Sep26-Sep26 Period.pdf",
+        "lineCount": 127,
+        "guaranteeNonZero": 127
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      79.04
+    ],
+    "primaryCount": 12,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 67
   }
 ]
