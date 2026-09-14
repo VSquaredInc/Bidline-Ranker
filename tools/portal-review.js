@@ -25,7 +25,8 @@ const path = require('path');
 // Requiring bid-file-doctor installs the pdfjs console-noise filter and gives us
 // the shared review engine (analyzeSchedule / printReport).
 const { analyzeSchedule, printReport } = require('./bid-file-doctor');
-const { loadAbrParsers, readAppVersion, readAircraftBases, fileFromPath, fileFromBuffer } = require('./lib/abr-loader');
+const { loadAbrParsers, readAppVersion, fileFromPath, fileFromBuffer } = require('./lib/abr-loader');
+const AIRCRAFT_BASES = require('./lib/aircraft-bases');
 const fingerprint = require('./lib/fingerprint');
 const portal = require('./lib/portal');
 const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
@@ -199,15 +200,20 @@ async function main() {
   }
 
   // Portal mode — needs credentials.
+  //
+  // RETIRED in practice (September 2026): Atlas moved the bid library to
+  // SharePoint Online behind Duo MFA, so the Vercel endpoint this mode talks to
+  // was replaced by a 410 stub and no unattended login is possible. Use
+  // portal-download.js (browser + one manual Duo login) and then --local.
+  // The sweep is left intact in case an unattended path returns.
   const creds = { username: process.env.ATLAS_USERNAME, password: process.env.ATLAS_PASSWORD };
   if (!creds.username || !creds.password) {
-    console.error('Set ATLAS_USERNAME and ATLAS_PASSWORD (env / GitHub Actions secrets) for portal mode,');
-    console.error('or use:  node portal-review.js --local <folder>');
+    console.error('Portal mode is retired (the Atlas portal now requires Duo MFA; the fetch endpoint answers 410).');
+    console.error('Use:  node portal-download.js   then   node portal-review.js --local out/portal-download/<BASE>-<AIRCRAFT>-<POS>');
     process.exitCode = 2;
     return;
   }
 
-  const AIRCRAFT_BASES = readAircraftBases(ABR_HTML);
   console.log(`Portal: ${portal.endpoint()}`);
   let listed = 0, listFailed = 0, authFailed = false;
   sweep:
@@ -230,6 +236,11 @@ async function main() {
             if (fetched.status === 401) {
               authFailed = true;
               console.error('Authentication failed — abandoning the sweep (no further login attempts).');
+              break sweep;
+            }
+            // 410 = the endpoint itself is retired; nothing per-combo about it.
+            if (fetched.status === 410) {
+              console.error('The portal-fetch endpoint is retired (410) — use portal-download.js + --local. Abandoning the sweep.');
               break sweep;
             }
             continue;

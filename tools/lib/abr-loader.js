@@ -97,14 +97,4 @@ function fileFromBuffer(name, buffer) {
   };
 }
 
-// Read the AIRCRAFT_BASES map out of ABR.html so the reviewer iterates the same
-// fleet/base list the app offers — single source of truth, no drift.
-function readAircraftBases(htmlPath) {
-  const html = fs.readFileSync(htmlPath, 'utf8');
-  const m = html.match(/AIRCRAFT_BASES\s*=\s*(\{[\s\S]*?\})/);
-  if (!m) throw new Error('Could not find AIRCRAFT_BASES in ABR.html.');
-  // eslint-disable-next-line no-eval
-  return eval('(' + m[1] + ')');
-}
-
-module.exports = { loadAbrParsers, readAppVersion, fileFromPath, fileFromBuffer, readAircraftBases, REQUIRED_FNS };
+module.exports = { loadAbrParsers, readAppVersion, fileFromPath, fileFromBuffer, REQUIRED_FNS };

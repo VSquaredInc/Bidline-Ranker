@@ -57,30 +57,43 @@ lines floored to 64 hrs. Primary lines should almost always have a real
 guarantee, so a high floor rate means the credit guarantees aren't being read —
 the "everything is 64" symptom.
 
-## Automated monthly review from the portal (`portal-review.js`)
+## Monthly review, all combos (`portal-download.js` + `portal-review.js --local`)
 
-`bid-file-doctor.js` checks a local folder. `portal-review.js` does the same
-checks but pulls the files itself from the Atlas portal — for **every**
-base/aircraft/position — so nothing has to be downloaded by hand. It runs
-automatically on the 15th via `.github/workflows/monthly-bid-review.yml`.
-
-It fetches through the app's own endpoint (`api/fetch-bid.js` on Vercel), which
-means it also exercises the real folder/file-matching logic — the part that
-breaks when Atlas renames things. It iterates the `AIRCRAFT_BASES` map read
-straight from `ABR.html` (747/767/777 × their bases × CA/FO).
+**September 2026: the portal moved.** Atlas migrated the bid package library
+from the on-prem SharePoint (`employees.atlasair.com`, username/password) to
+SharePoint Online (`atlasairww.sharepoint.com`) behind Duo MFA and a Defender
+for Cloud Apps session proxy (`.mcas.ms`). No unattended script can log in
+any more, so the app's "Fetch from Portal" feature was retired (v1.12.0), the
+Vercel endpoint answers `410`, and the scheduled GitHub Actions review is
+disabled (`workflow_dispatch` only). The monthly review is now a local,
+two-command job — one human Duo login, the rest automated:
 
 ```
-# all combos from the portal (needs credentials):
-ATLAS_USERNAME=... ATLAS_PASSWORD=... node portal-review.js
-
-# credential-free: run the same review + dataset build on a local folder
-node portal-review.js --local ../LAX
+cd tools
+node portal-download.js          # opens a browser; complete the Duo login once
+node portal-review.js --local out/portal-download/LAX-747-FO   # per combo
 ```
 
-**Two outputs:**
-1. A **review** (per-combo report + a `review-summary.json`). In CI the job
-   *fails* — emailing you — if any combo shows an error, so you hear about a
-   format change without watching anything.
+`portal-download.js` crawls every base/aircraft folder under BidPackage,
+classifies files exactly as `api/fetch-bid.js` used to (`lib/file-matching.js`),
+and downloads the bidline + both credit PDFs per position into
+`out/portal-download/<BASE>-<AIRCRAFT>-<POS>/`. It is **resumable** (files
+already on disk are skipped — just run it again after a stall), logs to
+`out/portal-download/run.log`, and takes `--only LAX-747,MIA-767` to limit the
+sweep and `--fresh` to re-download everything. The browser profile with the
+session cookies lives in `.browser-profile/` (gitignored — never commit it).
+
+If a sign-in prompt appears mid-run, the script says `LOGIN NEEDED` in the
+terminal and waits for you; anywhere else it stalls it retries on its own.
+The first run (2026-09-10) completed 11/24 combos because the proxied session
+was bounced periodically and the old script slept through it — the log will
+show whether the recovery logic holds up.
+
+`portal-review.js` in portal mode (`ATLAS_USERNAME`/`ATLAS_PASSWORD`) is kept
+but no longer works; it explains why and points at the commands above.
+
+**Two outputs of the review:**
+1. A **review** (per-combo report + a `review-summary.json`).
 2. The **parsed dataset** per combo under `tools/out/<month>/data/` — the
    per-line facts (guarantee, days-off, trips, deadheads, airports, line type),
    *not* scores. This is the groundwork for letting the app load pre-parsed data
@@ -88,23 +101,18 @@ node portal-review.js --local ../LAX
 
 ### Privacy
 
-The repo is **public**, so CI artifacts are publicly downloadable. The workflow
-therefore uploads **only** `review-summary.json` (counts/findings — no bid
-content). The parsed dataset is written to `tools/out/` (gitignored) and is only
-produced in full when **you** run `portal-review.js` locally with your
-credentials. No Atlas bid data is published anywhere until a hosting/access
-model is chosen.
+The repo is **public**. The parsed dataset and the downloaded PDFs are written
+to `tools/out/` (gitignored). No Atlas bid data is published anywhere until a
+hosting/access model is chosen.
 
-### CI setup (once)
-
-Add repository secrets `ATLAS_USERNAME` and `ATLAS_PASSWORD`
-(Settings → Secrets and variables → Actions). Trigger a manual test run from the
-Actions tab ("Monthly Bid File Review" → Run workflow) to confirm it can log in
-and fetch before relying on the schedule.
+**Known tooling bug:** `--local` runs and `bid-file-doctor.js` overwrite the
+committed fingerprint baseline for the combo they parse (`savedAt`/`appVersion`
+rewritten). After a troubleshooting run, `git checkout -- fingerprints/` before
+committing anything.
 
 ## Roadmap (data-in-app)
 
-The intended end state: the monthly job publishes the parsed dataset to a
+The intended end state: the monthly local run publishes the parsed dataset to a
 **private/access-controlled** store, and `ABR.html` loads it when a pilot selects
 aircraft/position/base — no fetch or manual upload needed for normal use (manual
 upload stays as a fallback). The server does the fragile, format-dependent

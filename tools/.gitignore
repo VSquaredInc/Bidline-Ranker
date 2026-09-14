@@ -1,6 +1,10 @@
 node_modules/
 package-lock.json
 
+# Persistent browser login profile for portal-download.js — contains real
+# session cookies for the Atlas SharePoint portal. Never commit.
+.browser-profile/
+
 # Parsed bid datasets are PRIVATE (Atlas-internal data) — never commit.
 # They are produced as CI artifacts until a hosting/access model is chosen.
 out/

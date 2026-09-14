@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.11.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v20` (in service-worker.js)  
+**Current version:** 1.12.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v21` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -32,7 +32,7 @@ Christopher is an Atlas Air pilot building this tool for personal and eventual c
 2. **Bump `CACHE_NAME`** in service-worker.js — increment the number (e.g., `v12` → `v13`). **CRITICAL: this is what forces all existing users to download the new ABR.html.** If this is skipped, every returning visitor continues to run the old cached version indefinitely, regardless of how many times ABR.html is redeployed.
 3. **Create a backup** — copy ABR.html to `backups/ABR_backup_YYYYMMDD_HHMMSS.html`.
 4. **Commit and push** to GitHub — triggers GitHub Pages update automatically.
-5. **Redeploy Vercel** if `api/fetch-bid.js` changed — user runs `npx vercel --prod` from the project directory (or via Vercel dashboard on machines without Node.js).
+5. **Redeploy Vercel** only if `api/fetch-bid.js` changed (it is a retired 410 stub since v1.12.0 — rarely) — user runs `npx vercel --prod` from the project directory (or via Vercel dashboard on machines without Node.js).
 
 ---
 
@@ -42,8 +42,8 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 
 | File | Purpose |
 |---|---|
-| `ABR.html` | Entire app — parsing, ranking, UI, portal fetch client |
-| `api/fetch-bid.js` | Vercel serverless function — authenticates to Atlas Air SharePoint and downloads bid PDFs |
+| `ABR.html` | Entire app — parsing, ranking, UI (manual PDF upload only since v1.12.0) |
+| `api/fetch-bid.js` | **Retired** Vercel function — answers `410` with a "portal now requires Duo, upload manually" message so stale cached pre-1.12 clients fail fast. The old NTLM fetcher is in git history (`36ca2f4`) |
 | `service-worker.js` | PWA cache-first offline support |
 | `manifest.json` | PWA manifest (name, icons, theme) |
 | `pdf.min.js` / `pdf.worker.min.js` | PDF.js v3.11.174 bundled locally (not CDN) |
@@ -52,11 +52,13 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 
 **PDF parsing:** PDF.js runs in-browser. `parseBidlineWithPositions()` is the main bidline parser; `parseCreditByGeometry()` parses 2026 credit PDFs positionally (legacy `parseCreditValue()` is the pre-2026 fallback). PDF Y=0 is bottom; sort descending for top-to-bottom reading. `rowTolerance=3px`, `colTolerance=15px`.
 
-**Portal fetch:** `api/fetch-bid.js` deployed on Vercel at `https://bidline.vercel.app/api/fetch-bid`. Supports both Basic Auth and NTLM against the Atlas Air SharePoint (`employees.atlasair.com/FlightOps/BidPackage`). Auto-detects auth type on first request.
+**Portal fetch — RETIRED (v1.12.0, September 2026).** Atlas moved the bid package library from the on-prem SharePoint (`employees.atlasair.com`, Basic/NTLM — the old host no longer answers at all) to **SharePoint Online** at `https://atlasairww.sharepoint.com/sites/Employees-FlightOps/BidPackage` behind Entra Conditional Access with **Duo MFA** and a Defender for Cloud Apps session proxy (`atlasairww.sharepoint.com.mcas.ms`). No server-side script can complete that sign-in for a pilot, so the in-app "Fetch from Portal" tab was removed; Step 1 links pilots to the portal landing page (`…/SitePages/BidPackage.aspx`) and takes manual uploads. `https://bidline.vercel.app/api/fetch-bid` stays deployed as a 410 stub for users on a stale cached app. Folder names on the new site look like `01-September 2026 LAX 747` (`00-` general, `01-` 747, `02-` 767, `03-` 777); a migration artefact renamed at least one file with a `.1` suffix (`September 2026 Bidlines SEA 767 CA.1.pdf`). Historical per-user fetch detail is in the "Portal Folder & File Detection" section below.
 
-**Monthly file-review tooling (`tools/`):** Catches the recurring "new month, the format changed" breakage. Both tools load the *real* parsers out of `ABR.html` (via `lib/abr-loader.js`, so they test shipped code, not a copy), check invariants, and diff against saved fingerprints (`tools/fingerprints/<BASE>-<AC>-<POS>.json`). They surface filename-pattern changes, credit-table format changes, new/renamed line types, dropped lines, and the "everything floored to 64" symptom across all fleets (747/767/777).
+**Monthly file-review tooling (`tools/`):** Catches the recurring "new month, the format changed" breakage. The tools load the *real* parsers out of `ABR.html` (via `lib/abr-loader.js`, so they test shipped code, not a copy), check invariants, and diff against saved fingerprints (`tools/fingerprints/<BASE>-<AC>-<POS>.json`). They surface filename-pattern changes, credit-table format changes, new/renamed line types, dropped lines, and the "everything floored to 64" symptom across all fleets (747/767/777).
 - `bid-file-doctor.js "../LAX"` — checks a **local folder** of PDFs. `cd tools && npm install` once first.
-- `portal-review.js` — pulls files itself from the portal (via the Vercel `fetch-bid` endpoint, so it also exercises the real folder/file-matching) for **every** base/aircraft/position in `AIRCRAFT_BASES`. Runs automatically on the 15th via `.github/workflows/monthly-bid-review.yml` (needs `ATLAS_USERNAME`/`ATLAS_PASSWORD` repo secrets); the job fails → emails on any format change. Also runs locally: `node portal-review.js --local ../LAX`.
+- `portal-download.js` — **the monthly fetch since Sep 2026.** Opens a real (Playwright) browser with a persistent profile in `tools/.browser-profile/` (gitignored); Christopher completes the Duo login once; it then crawls every base/aircraft folder, classifies files with `lib/file-matching.js` (same rules the old `api/fetch-bid.js` used) and downloads bidline + both credit PDFs per position into `tools/out/portal-download/<BASE>-<AIRCRAFT>-<POS>/`. Resumable, logs to `run.log`, `--only LAX-747,MIA-767`, `--fresh`. The fleet/base list is `tools/lib/aircraft-bases.js` (no longer read from `ABR.html`). First run 2026-09-10 got 11/24 combos — the MCAS session gets bounced periodically; the rewrite recovers instead of sleeping through it, unverified until the next run.
+- `portal-review.js --local out/portal-download/<combo>` — the review + dataset build on a downloaded combo. Portal mode (credentials → Vercel) is dead and says so. The GitHub Actions schedule in `.github/workflows/monthly-bid-review.yml` is **disabled** (manual dispatch only) because no unattended login exists.
+- **Known bug:** `--local`/doctor runs overwrite the committed fingerprint baseline for the combo parsed — `git checkout -- tools/fingerprints/` afterwards.
 - It emits a **parsed dataset** (per-line facts, not scores) under `tools/out/` — groundwork for the roadmap of loading pre-parsed data in-app (pilot picks aircraft/position/base; no fetch/upload). The dataset is **private**: the repo is public so CI uploads only a non-sensitive summary; full datasets are produced only when run locally with credentials. Hosting/access for pilot-facing data is undecided ("private for now").
 - If `ABR.html` renames a parser, update `REQUIRED_FNS` in `lib/abr-loader.js`. See `tools/README.md`.
 
@@ -72,7 +74,9 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 
 ---
 
-## Portal Folder & File Detection (api/fetch-bid.js)
+## Portal Folder & File Detection (historical — api/fetch-bid.js, retired v1.12.0)
+
+The rules below described the retired per-user fetch. The bidline/credit filename rules still apply and now live in `tools/lib/file-matching.js` for the local downloader.
 
 **Folder finding:** Lists all folders in the BidPackage library, filters by folders containing both the base code (e.g., `ORD`) and aircraft type (e.g., `747`), then picks the one with the most recent date parsed from the folder name format `DD-MON YYYY` (e.g., `15-MAY 2026 ORD 747`). Fully dynamic — no hardcoded months. **Fallback:** if no date can be parsed from any folder name (e.g., Atlas Air renames folders), falls back to the alphabetically last matching folder.
 
@@ -246,7 +250,7 @@ Content is real only if it matches: airport pattern (3-letter, not in excludeCod
 ## UI Notes
 
 - White header: Atlas Air logo (left) | divider | title | How to Use button | divider | IBT logo (right)
-- Two upload sources: "Fetch from Portal" tab and "Upload Manually" tab
+- Step 1 is manual upload only (since v1.12.0), with a note linking to the Atlas Bid Package portal (Duo sign-in)
 - Three file slots: Bidline Schedule (required), Line Credit Month 1 (optional), Line Credit Month 2 (optional)
 - Filters: Line Type checkboxes (Primary/Secondary/Reserve), Line Duration, Dates Desired Off (date ranges), Airport Preferences (whitelist/blacklist, absolute or % adjustment)
 - Results table: 10 fixed-width columns; Conflict Optimizer columns added when optimizer mode is active

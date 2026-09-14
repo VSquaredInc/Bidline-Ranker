@@ -1,22 +1,23 @@
 name: Monthly Bid File Review
 
-# Reviews the new bid posting for every base/aircraft/position and alerts (the
-# job fails → GitHub emails the repo owner) if any file-format change is detected
-# that could break the app. The bid package is available no later than 12:00Z on
-# the 15th; this runs at 13:00Z for a buffer.
+# SCHEDULE DISABLED (September 2026). Atlas moved the bid package library to
+# SharePoint Online behind Duo MFA + Conditional Access, so no unattended job
+# can sign in any more — the portal-fetch endpoint this review used was retired
+# in v1.12.0 and now answers 410. The monthly review is done locally instead:
 #
-# Setup (once): add repository secrets ATLAS_USERNAME and ATLAS_PASSWORD
-# (Settings → Secrets and variables → Actions). Without them the job is skipped.
+#   cd tools
+#   node portal-download.js         # opens a browser; you complete the Duo login once
+#   node portal-review.js --local out/portal-download/<BASE>-<AIRCRAFT>-<POS>
+#
+# Kept as workflow_dispatch only so the job definition survives for when/if an
+# unattended path (e.g. a company-approved Graph API app) becomes available.
 #
 # Privacy: the repo is public, so this job uploads ONLY the non-sensitive review
 # summary. The parsed bid dataset is NOT uploaded (it would be publicly
-# downloadable). Generate the full dataset privately on your own machine with
-#   cd tools && node portal-review.js        (writes to tools/out/, gitignored)
+# downloadable).
 
 on:
-  schedule:
-    - cron: '0 13 15 * *'   # 13:00 UTC on the 15th of every month
-  workflow_dispatch: {}       # allow manual runs for testing
+  workflow_dispatch: {}       # manual runs only — see note above
 
 permissions:
   contents: read
