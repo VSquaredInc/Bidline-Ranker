@@ -819,13 +819,16 @@
             margin-top: 4px;
         }
 
-        th.guarantee-col.dimmed,
-        td.guarantee-col.dimmed,
-        th.daysoff-col.dimmed,
-        td.daysoff-col.dimmed,
-        th.dh-col.dimmed,
-        td.dh-col.dimmed {
-            opacity: 0.35;
+        /* Conflict Mode (Vacation/Training) hides these entirely — Guarantee,
+           Days Off, and DH counts are meaningless once the period score switches
+           to Effective Days Off, and Airports reflects the ORIGINAL unmodified
+           schedule: only the leading side (discussed with the pilot re: LOC
+           25.K.3.a) has real odds of staying intact — the trailing side is more
+           likely reassigned to a secondary pairing with unknowable airports. */
+        th.col-suppressed,
+        td.col-suppressed,
+        col.col-suppressed {
+            display: none;
         }
 
         .linetype-checks {
@@ -1397,14 +1400,14 @@
                             <col style="width:4%">   <!-- Rank -->
                             <col style="width:6%">   <!-- Line # -->
                             <col style="width:11%">  <!-- Type -->
-                            <col style="width:7%">   <!-- Guarantee -->
-                            <col style="width:6%">   <!-- Days Off -->
+                            <col id="col-guarantee" style="width:7%">   <!-- Guarantee -->
+                            <col id="col-daysoff" style="width:6%">   <!-- Days Off -->
                             <col style="width:8%">   <!-- Effective Value -->
-                            <col style="width:5%">   <!-- Front DH -->
-                            <col style="width:5%">   <!-- Back DH -->
+                            <col id="col-frontdh" style="width:5%">   <!-- Front DH -->
+                            <col id="col-backdh" style="width:5%">   <!-- Back DH -->
                             <col style="width:16%">  <!-- Trips -->
                             <col style="width:10%">  <!-- Optimizer -->
-                            <col style="width:22%">  <!-- Airports -->
+                            <col id="col-airports" style="width:22%">  <!-- Airports -->
                         </colgroup>
                         <thead>
                             <tr>
@@ -1433,7 +1436,7 @@
                                 </th>
                                 <th>Trips</th>
                                 <th id="th-optimizer">Optimizer</th>
-                                <th>Airports</th>
+                                <th id="th-airports">Airports</th>
                             </tr>
                         </thead>
                         <tbody id="resultsBody">
@@ -1489,7 +1492,7 @@
                 <p>Enable <strong>Training Mode</strong>, <strong>Vacation Mode</strong>, or both to factor known schedule conflicts into the ranking. Each mode re-scores affected bid periods using <em>Effective Days Off</em> rather than guarantee hours, so lines with better conflict placement rank higher.</p>
                 <ul>
                     <li><strong>Training Mode</strong> — Enter your scheduled training start and end dates. Training on a <em>workday</em> is ideal: the pilot is scheduled to fly anyway, so training effectively replaces that trip and frees the day. Training on an <em>off day</em> costs the pilot a scheduled day off. The Optimizer column shows the result per period: <span style="color:#4ade80">✓ Xd on days</span> (all workdays — best), <span style="color:#f97316">Xd/Yd on ⚠</span> (partial overlap), or <span style="color:#ef4444">✗ Xd off days</span> (all off days — worst).</li>
-                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts) to find the position that maximizes effective days off — or, if you've also entered Dates Desired Off, the best legal position that still keeps every one of those dates off. <em>Vacation workdays</em> are trip days covered by vacation. AWRD days are automatic whenever <strong>3 or fewer</strong> workdays remain on <em>either edge</em> of the pattern — before or after the vacation (per the Atlas Article 7 Vacation Adjustment form). Only one edge gets the AWRD block (the larger one, when both qualify); the other edge falls back to its own unconditional single automatic day: the workday immediately <em>before</em> the vacation off (25.K.3.a), or <em>R-1</em> home reserve immediately <em>after</em> it (Article 31.B) — for up to <strong>4 extra days off</strong> beyond the vacation. When an edge has 4 or more workdays and isn't the winning side, it only gets that single automatic day, and the rest are either flown as published or reassigned as secondary. <em>Note:</em> if the pairing transits base after an R-1 day, or a secondary assignment comes out shorter than the published trip, you may pick up further days off — that depends on Company assignment history the app has no way to see, so it is deliberately <strong>not</strong> counted here. Check those cases yourself. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned, either edge), <span style="color:var(--gold)">R-1: 1d</span> (home-reserve day when the trailing edge didn't win AWRD), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction. When the leading edge's workday run is longer than the 1 day actually scored, you'll also see <span style="color:#f97316;font-style:italic">Possible +Xd — LOC 25.K.3.a</span>: per the 2023 Letter of Clarification on 25.K.3.a, the Company may (at its option) convert the <em>entire</em> remaining leading portion of the trip pairing to Days Off rather than just the single guaranteed day — in practice this is likely whenever flying the rest of the pairing and deadheading back in time isn't realistic (e.g. anything but a short/domestic remaining leg). That depends on per-city deadhead routing and crew rest the app can't evaluate, so it's <strong>not</strong> added to the score — flagged only so you know to ask about it.</li>
+                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts) to find the position that maximizes effective days off — or, if you've also entered Dates Desired Off, the best legal position that still keeps every one of those dates off. <em>Vacation workdays</em> are trip days covered by vacation. AWRD days are automatic whenever <strong>3 or fewer</strong> workdays remain on <em>either edge</em> of the pattern — before or after the vacation (per the Atlas Article 7 Vacation Adjustment form). Only one edge gets the AWRD block (the larger one, when both qualify); the other edge falls back to its own unconditional single automatic day: the workday immediately <em>before</em> the vacation off (25.K.3.a), or <em>R-1</em> home reserve immediately <em>after</em> it (Article 31.B) — for up to <strong>4 extra days off</strong> beyond the vacation. When an edge has 4 or more workdays and isn't the winning side, it only gets that single automatic day, and the rest are either flown as published or reassigned as secondary. <em>Note:</em> if the pairing transits base after an R-1 day, or a secondary assignment comes out shorter than the published trip, you may pick up further days off — that depends on Company assignment history the app has no way to see, so it is deliberately <strong>not</strong> counted here. Check those cases yourself. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned, either edge), <span style="color:var(--gold)">R-1: 1d</span> (home-reserve day when the trailing edge didn't win AWRD), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction. When the leading edge's workday run is a <em>little</em> longer than the 1 day actually scored — up to 3 extra days — you'll also see <span style="color:#f97316;font-style:italic">Possible +Xd — LOC 25.K.3.a</span>: per the 2023 Letter of Clarification on 25.K.3.a, the Company may (at its option) convert the remaining leading portion of the trip pairing to Days Off rather than just the single guaranteed day. That's realistic only for a genuinely short remainder — a few extra days has real odds of going your way, but the more of the pairing that's left, the more likely the Company can actually fly you on it instead, so <strong>the note only appears for a gap of 3 days or fewer</strong> and is suppressed above that rather than advertise an outcome that won't happen. It's never added to the score — flagged only so you know to ask about it.</li>
                     <li><strong>Vacation adjustments Crew Planning applies automatically</strong> — Per LOC on 7.D.9 (May 2024) the Company automatically returns you to base no later than 0701z on the workday before your vacation and schedules R-1 (Home Reserve) on the first workday after your vacation ends (unless you opt out via Bidding by 1200z on the 20th). These are on top of the printed schedule, so your <em>actual</em> days off around vacation are usually one greater on each side than what the app shows from the bidline PDF.</li>
                     <li><strong>Early-arrival flag (0700z rule)</strong> — Atlas treats any day whose trip duty ends before 0700z as a Day Off. If your last vacation day happens to be the day a trip pairing arrives before 0700z, check the box under the vacation dates. This changes the classification from "fully conflicted" to "partially conflicted", which under 7.D.2.d restricts the slide to positions that abut a Day Off. Without this flag the app assumes your line's PDF X-markers are the complete off-day picture.</li>
                     <li><strong>60-day lines</strong> — Results are shown per bid period (BP1 / BP2) so you can see exactly which period each conflict affects.</li>
@@ -1544,7 +1547,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.13.0';
+        const APP_VERSION   = '1.13.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3985,13 +3988,17 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         const sideTag = tags.length ? ` <span style="opacity:.7">(${tags.join(', ')})</span>` : '';
                         push(`<span class="opt-line opt-slide" style="opacity:.75">Alt (${alt.direction}): ${fmtDate(alt.slideStart)}–${fmtDate(alt.slideEnd)}${sideTag}</span>`);
                     }
-                    // Unscored upside: the leading edge sits on a much longer trip-pairing
+                    // Unscored upside: the leading edge sits on a longer trip-pairing
                     // remainder than the scored 1-day LOC credits. Per the 2023 LOC on
                     // 25.K.3.a, the Company MAY convert the whole remainder to Days Off —
-                    // not guaranteed (depends on deadhead/crew-rest feasibility the app
-                    // can't evaluate), so flagged as potential, not added to the score.
+                    // not guaranteed, and only realistic for a genuinely short remainder.
+                    // Per the domain owner: 3 extra days has real odds of going the
+                    // pilot's way; by 4 the Company increasingly has room to actually fly
+                    // a leg instead, and by 5+ it's close to certain they will — so the
+                    // note is capped at a 3-day gap and suppressed above that, rather than
+                    // advertising an outcome that won't happen.
                     const potential = (rs.leadingRunFull || 0) - (rs.locDaysOff || 0);
-                    if (potential > 0) {
+                    if (potential > 0 && potential <= 3) {
                         push(`<span class="opt-line opt-potential">Possible +${potential}d — LOC 25.K.3.a (Company discretion, not guaranteed)</span>`);
                     }
                 });
@@ -4010,17 +4017,22 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const anyTrain = results.length > 0 && results[0].trainMode;
             const optMode  = anyVac || anyTrain;
 
-            // Update column headers and dimming for optimizer mode
-            const thGuarantee = document.getElementById('th-guarantee');
-            const thDaysOff   = document.getElementById('th-daysoff');
-            const thFrontDH   = document.getElementById('th-frontDH');
-            const thBackDH    = document.getElementById('th-backDH');
+            // Conflict Mode (Vacation/Training) suppresses Guarantee, Days Off, DH,
+            // and Airports entirely — none are meaningful once the period score
+            // switches to Effective Days Off (see CSS .col-suppressed).
+            const suppressedIds = [
+                'th-guarantee', 'col-guarantee',
+                'th-daysoff',   'col-daysoff',
+                'th-frontDH',   'col-frontdh',
+                'th-backDH',    'col-backdh',
+                'th-airports',  'col-airports'
+            ];
+            for (const id of suppressedIds) {
+                const el = document.getElementById(id);
+                if (el) el.classList.toggle('col-suppressed', optMode);
+            }
             const effvalLabel  = document.getElementById('effval-label');
             const thOptimizer  = document.getElementById('th-optimizer');
-            if (thGuarantee) thGuarantee.classList.toggle('dimmed', optMode);
-            if (thDaysOff)   thDaysOff.classList.toggle('dimmed', optMode);
-            if (thFrontDH)   thFrontDH.classList.toggle('dimmed', optMode);
-            if (thBackDH)    thBackDH.classList.toggle('dimmed', optMode);
             if (effvalLabel) {
                 effvalLabel.textContent = optMode ? 'Conflict Score' : 'Eff. Value';
             }
@@ -4045,13 +4057,12 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 if (result.rank <= 3) rankClass = 'top-3';
                 else if (result.rank <= 10) rankClass = 'top-10';
 
-                const dimCell = (cls) =>
-                    `<td class="value-highlight ${cls} dimmed" style="color:var(--gray-500)">—</td>`;
+                const suppressedCls = optMode ? ' col-suppressed' : '';
 
-                const guaranteeCell = optMode ? dimCell('guarantee-col') : `<td class="value-highlight guarantee-col">${result.guarantee.toFixed(2)}</td>`;
-                const daysOffCell   = optMode ? dimCell('daysoff-col')   : `<td class="value-highlight daysoff-col">${result.daysOff}</td>`;
-                const frontDHCell   = optMode ? dimCell('dh-col')        : `<td class="value-highlight dh-col">${result.frontDH || 0}</td>`;
-                const backDHCell    = optMode ? dimCell('dh-col')        : `<td class="value-highlight dh-col">${result.backDH  || 0}</td>`;
+                const guaranteeCell = `<td class="value-highlight guarantee-col${suppressedCls}">${result.guarantee.toFixed(2)}</td>`;
+                const daysOffCell   = `<td class="value-highlight daysoff-col${suppressedCls}">${result.daysOff}</td>`;
+                const frontDHCell   = `<td class="value-highlight dh-col${suppressedCls}">${result.frontDH || 0}</td>`;
+                const backDHCell    = `<td class="value-highlight dh-col${suppressedCls}">${result.backDH  || 0}</td>`;
 
                 const effValDisplay = optMode
                     ? result.effectiveValue.toFixed(1)
@@ -4092,7 +4103,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     ${backDHCell}
                     <td class="trips-cell">${tripsCell}</td>
                     <td>${formatOptimizerCell(result)}</td>
-                    <td class="airports-cell">${formatAirports(result.airports)}</td>
+                    <td class="airports-cell${suppressedCls}">${formatAirports(result.airports)}</td>
                 `;
 
                 tbody.appendChild(tr);
@@ -4128,8 +4139,12 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const slide = r.vacScore.recommendedSlideStart
                         ? `Slide: ${fmtDate(r.vacScore.recommendedSlideStart)}-${fmtDate(r.vacScore.recommendedSlideEnd)}`
                         : 'No slide';
+                    // Capped/suppressed the same way as the on-screen callout — see there.
                     const potential = (r.vacScore.rangeScores || [])
-                        .reduce((sum, rs) => sum + Math.max(0, (rs.leadingRunFull || 0) - (rs.locDaysOff || 0)), 0);
+                        .reduce((sum, rs) => {
+                            const p = (rs.leadingRunFull || 0) - (rs.locDaysOff || 0);
+                            return sum + (p > 0 && p <= 3 ? p : 0);
+                        }, 0);
                     const potentialInfo = potential > 0 ? ` | Possible LOC:+${potential}d` : '';
                     optInfo = `"LOC:${r.vacScore.locDaysOff || 0} | AWRD:${r.vacScore.awardDays} | R-1:${r.vacScore.r1DaysOff || 0} | EffOff:${r.vacScore.effectiveDaysOff} | ${slide}${potentialInfo}"`;
                 } else if (r.trainMode && r.trainScore) {
