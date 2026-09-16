@@ -1338,16 +1338,12 @@
                                 </div>
                                 <button type="button" class="btn-remove-range" onclick="removeVacationRange(1)" title="Remove this vacation period" style="visibility:hidden;">✕</button>
                             </div>
-                            <label class="vac-range-flag" style="display:block; margin-top:6px; font-size:0.87em; color:var(--gray-700);">
-                                <input type="checkbox" class="vac-early-arrival" style="vertical-align:middle;">
-                                Last vacation day: trip arrives before 0700z (Atlas treats as day off)
-                            </label>
                         </div>
                     </div>
                     <button type="button" class="btn-add-range" onclick="addVacationRange()" style="margin-top:8px;">
                         <span>+</span> Add Another Vacation Period
                     </button>
-                    <div class="form-hint" style="margin-top:8px;">Add one row per awarded vacation week. Each is optimally slid independently; rankings use the combined effective days off. Optimal slide within CBA Article 7.D rules computed automatically. Check the "early arrival" box only when your line's trip pairing arrives before 0700z on your last vacation day — Crew Planning will classify that day as off and slides become more restricted (must abut a Day Off per 7.D.2.d).</div>
+                    <div class="form-hint" style="margin-top:8px;">Add one row per awarded vacation week. Each is optimally slid independently; rankings use the combined effective days off. Optimal slide within CBA Article 7.D rules computed automatically. If your line's trip pairing arrives before 0700z on your last vacation day, the app detects that from the schedule automatically (Crew Planning classifies that day as off, per Atlas's 0700z rule) — no need to flag it yourself.</div>
                 </div>
             </div>
         </div>
@@ -1494,7 +1490,7 @@
                     <li><strong>Training Mode</strong> — Enter your scheduled training start and end dates. Training on a <em>workday</em> is ideal: the pilot is scheduled to fly anyway, so training effectively replaces that trip and frees the day. Training on an <em>off day</em> costs the pilot a scheduled day off. The Optimizer column shows the result per period: <span style="color:#4ade80">✓ Xd on days</span> (all workdays — best), <span style="color:#f97316">Xd/Yd on ⚠</span> (partial overlap), or <span style="color:#ef4444">✗ Xd off days</span> (all off days — worst).</li>
                     <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts) to find the position that maximizes effective days off — or, if you've also entered Dates Desired Off, the best legal position that still keeps every one of those dates off. <em>Vacation workdays</em> are trip days covered by vacation. AWRD days are automatic whenever <strong>3 or fewer</strong> workdays remain on <em>either edge</em> of the pattern — before or after the vacation (per the Atlas Article 7 Vacation Adjustment form). Only one edge gets the AWRD block (the larger one, when both qualify); the other edge falls back to its own unconditional single automatic day: the workday immediately <em>before</em> the vacation off (25.K.3.a), or <em>R-1</em> home reserve immediately <em>after</em> it (Article 31.B) — for up to <strong>4 extra days off</strong> beyond the vacation. When an edge has 4 or more workdays and isn't the winning side, it only gets that single automatic day, and the rest are either flown as published or reassigned as secondary. <em>Note:</em> if the pairing transits base after an R-1 day, or a secondary assignment comes out shorter than the published trip, you may pick up further days off — that depends on Company assignment history the app has no way to see, so it is deliberately <strong>not</strong> counted here. Check those cases yourself. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned, either edge), <span style="color:var(--gold)">R-1: 1d</span> (home-reserve day when the trailing edge didn't win AWRD), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction. When the leading edge's workday run is a <em>little</em> longer than the 1 day actually scored — up to 3 extra days — you'll also see <span style="color:#f97316;font-style:italic">Possible +Xd — LOC 25.K.3.a</span>: per the 2023 Letter of Clarification on 25.K.3.a, the Company may (at its option) convert the remaining leading portion of the trip pairing to Days Off rather than just the single guaranteed day. That's realistic only for a genuinely short remainder — a few extra days has real odds of going your way, but the more of the pairing that's left, the more likely the Company can actually fly you on it instead, so <strong>the note only appears for a gap of 3 days or fewer</strong> and is suppressed above that rather than advertise an outcome that won't happen. It's never added to the score — flagged only so you know to ask about it.</li>
                     <li><strong>Vacation adjustments Crew Planning applies automatically</strong> — Per LOC on 7.D.9 (May 2024) the Company automatically returns you to base no later than 0701z on the workday before your vacation and schedules R-1 (Home Reserve) on the first workday after your vacation ends (unless you opt out via Bidding by 1200z on the 20th). These are on top of the printed schedule, so your <em>actual</em> days off around vacation are usually one greater on each side than what the app shows from the bidline PDF.</li>
-                    <li><strong>Early-arrival flag (0700z rule)</strong> — Atlas treats any day whose trip duty ends before 0700z as a Day Off. If your last vacation day happens to be the day a trip pairing arrives before 0700z, check the box under the vacation dates. This changes the classification from "fully conflicted" to "partially conflicted", which under 7.D.2.d restricts the slide to positions that abut a Day Off. Without this flag the app assumes your line's PDF X-markers are the complete off-day picture.</li>
+                    <li><strong>Early-arrival detection (0700z rule)</strong> — Atlas treats any day whose trip duty ends before 0700z as a Day Off, even when the PDF doesn't print an X for it. The app detects this automatically: every time in these PDFs is UTC, so if a line's printed schedule shows its last activity on a given day as an arrival before 07:00 with nothing else following that day, the app treats that day as effectively off — no manual flag needed. When that day happens to be your vacation's last day, this can change the classification from "fully conflicted" to "partially conflicted", which under 7.D.2.d restricts the slide to positions that abut a Day Off.</li>
                     <li><strong>60-day lines</strong> — Results are shown per bid period (BP1 / BP2) so you can see exactly which period each conflict affects.</li>
                 </ul>
             </div>
@@ -1547,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.13.1';
+        const APP_VERSION   = '1.14.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2144,7 +2140,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                 scheduleEnd: pageScheduleEnd,  // Track when this line's schedule ends
                                 frontDH: 0,
                                 backDH: 0,
-                                trips: []
+                                trips: [],
+                                earlyArrivalDates: []
                             };
                         } else {
                             // Merge dates if the line appears on multiple pages
@@ -2250,7 +2247,34 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             if (colWords.length === 0) continue;
 
                             const colTexts = colWords.map(w => w.text);
-                            
+
+                            // Early-arrival detection (0700z rule): Atlas treats any day whose
+                            // trip duty ends before 0700 UTC as a Day Off — the printed X-markers
+                            // aren't guaranteed to already reflect this (see CLAUDE.md "0700z" /
+                            // Fix A). All PDF times are UTC (header: "ALL Times in UTC"). A
+                            // workday column qualifies when its LAST printed time is a
+                            // sub-07:00 arrival with nothing else following it that day (no
+                            // further flight departs — only the row filler remains after it).
+                            if (!colWorkingStatus[colIdx].isOff) {
+                                let lastTimeIdx = -1;
+                                for (let ti = 0; ti < colWords.length; ti++) {
+                                    if (/^\d{1,2}:\d{2}$/.test(colWords[ti].text)) lastTimeIdx = ti;
+                                }
+                                if (lastTimeIdx !== -1) {
+                                    const nothingAfter = colWords.slice(lastTimeIdx + 1)
+                                        .every(w => /^_+$/.test(w.text));
+                                    if (nothingAfter) {
+                                        const arrivalHour = parseInt(colWords[lastTimeIdx].text.split(':')[0], 10);
+                                        if (arrivalHour < 7) {
+                                            const earlyDate = new Date(baseYear, monthMap[dc.month], dc.day);
+                                            if (!lines[lineNum].earlyArrivalDates.some(d => d.getTime() === earlyDate.getTime())) {
+                                                lines[lineNum].earlyArrivalDates.push(earlyDate);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
                             // Pre-compute next column texts for overnight DH check
                             let nextColTexts = [];
                             if (colIdx + 1 < sortedDateCols.length) {
@@ -2727,10 +2751,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     </div>
                     <button type="button" class="btn-remove-range" onclick="removeVacationRange(${rangeId})" title="Remove this vacation period">✕</button>
                 </div>
-                <label class="vac-range-flag" style="display:block; margin-top:6px; font-size:0.87em; color:var(--gray-700);">
-                    <input type="checkbox" class="vac-early-arrival" style="vertical-align:middle;">
-                    Last vacation day: trip arrives before 0700z (Atlas treats as day off)
-                </label>
             `;
             container.appendChild(wrapper);
             updateVacRemoveButtons();
@@ -2755,15 +2775,14 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             document.querySelectorAll('#vacRangesContainer .vac-range-wrapper').forEach(w => {
                 const s = w.querySelector('.vac-range-start');
                 const e = w.querySelector('.vac-range-end');
-                const flag = w.querySelector('.vac-early-arrival');
                 if (s && e && s.value && e.value) {
                     const start = new Date(s.value + 'T00:00:00');
                     const end   = new Date(e.value + 'T00:00:00');
-                    if (end >= start) ranges.push({
-                        start,
-                        end,
-                        lastVacDayEffectivelyOff: !!(flag && flag.checked)
-                    });
+                    // lastVacDayEffectivelyOff is no longer a manual flag — it's derived
+                    // per line from bidlineInfo.earlyArrivalDates (0700z rule, detected
+                    // straight from the PDF) at scoring time, since it depends on what
+                    // that specific line's trip actually shows on this date.
+                    if (end >= start) ranges.push({ start, end });
                 }
             });
             return ranges;
@@ -3009,9 +3028,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         //     4 days off beyond the vacation itself.
         //
         // opts:
-        //   lastVacDayEffectivelyOff — bool. See Fix A: user asserts trip arrival on the last
-        //     vacation day is before 0700z, so that day is functionally a Day Off (Trent's rule).
-        //     Also affects partial-vs-full classification.
+        //   lastVacDayEffectivelyOff — bool. Fix A / "Trent's rule": true when the trip
+        //     pairing's arrival on the last vacation day is before 0700z, so that day is
+        //     functionally a Day Off. Derived automatically by the caller from
+        //     bidlineInfo.earlyArrivalDates (detected from the PDF's own printed times —
+        //     no longer a manual user assertion). Also affects partial-vs-full classification.
         //   desiredDates — Date[]. When given, the search prefers any legal slide position
         //     that keeps every one of these dates off over the position that purely
         //     maximizes effective days off — see the "Days Desired Off" priority below.
@@ -3491,10 +3512,15 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         );
 
                         // Optimise each vacation range independently using ALL trips.
-                        // Pass through the per-range 0700z-arrival flag (Fix A).
+                        // lastVacDayEffectivelyOff (Fix A, 0700z rule) is derived per line
+                        // from bidlineInfo.earlyArrivalDates — detected straight from this
+                        // line's own printed schedule — rather than a manual flag, since
+                        // whether a given calendar date is an early-arrival day depends on
+                        // what THIS specific trip pairing shows on it.
+                        const lineEarlyArrivals = bidlineInfo.earlyArrivalDates || [];
                         const rangeScores = vacationRanges.map(vr =>
                             computeVacationScore(lineTrips, lineDatesOff, schedEnd, vr.start, vr.end, {
-                                lastVacDayEffectivelyOff: !!vr.lastVacDayEffectivelyOff,
+                                lastVacDayEffectivelyOff: lineEarlyArrivals.some(d => sameDay(d, vr.end)),
                                 desiredDates: outstandingDesired
                             })
                         );
