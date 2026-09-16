@@ -805,6 +805,11 @@
             font-style: italic;
         }
 
+        .optimizer-col .opt-potential {
+            color: #f97316;
+            font-style: italic;
+        }
+
         .optimizer-col .opt-period-label {
             display: block;
             color: var(--gray-300);
@@ -1484,7 +1489,7 @@
                 <p>Enable <strong>Training Mode</strong>, <strong>Vacation Mode</strong>, or both to factor known schedule conflicts into the ranking. Each mode re-scores affected bid periods using <em>Effective Days Off</em> rather than guarantee hours, so lines with better conflict placement rank higher.</p>
                 <ul>
                     <li><strong>Training Mode</strong> — Enter your scheduled training start and end dates. Training on a <em>workday</em> is ideal: the pilot is scheduled to fly anyway, so training effectively replaces that trip and frees the day. Training on an <em>off day</em> costs the pilot a scheduled day off. The Optimizer column shows the result per period: <span style="color:#4ade80">✓ Xd on days</span> (all workdays — best), <span style="color:#f97316">Xd/Yd on ⚠</span> (partial overlap), or <span style="color:#ef4444">✗ Xd off days</span> (all off days — worst).</li>
-                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts, Award Days only when ≤3 workdays trail the vacation) to find the position that maximizes effective days off. <em>Vacation workdays</em> are trip days covered by vacation. The best play is a line where the vacation falls entirely inside one trip pairing: slide it so <strong>3 or fewer</strong> trip workdays remain <em>after</em> the vacation — those become <em>Award days</em> (7.D.7), and the single day immediately <em>before</em> the vacation comes off automatically (25.K.3.a LOC), for up to <strong>4 extra days off</strong> beyond the vacation. The Award Days election only exists when 3 or fewer workdays remain: if <strong>4 or more</strong> remain, you get no award days — the first day back is <em>R-1</em> home reserve (counted here as a day off, Article 31.B) and the rest are either flown as published or reassigned as secondary. <em>Note:</em> if the pairing transits base after that R-1, or if a secondary assignment comes out shorter than the published trip, you may pick up further days off — that depends on Company assignment history the app has no way to see, so it is deliberately <strong>not</strong> counted here. Check those cases yourself. (Additional workdays further ahead of the vacation stay on your bidline at the Company's discretion, so they aren't counted either.) The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned), <span style="color:var(--gold)">R-1: 1d</span> (home-reserve day when 4+ workdays trail the vacation), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction.</li>
+                    <li><strong>Vacation Mode</strong> — Enter your awarded vacation dates. The optimizer slides the vacation window within CBA Article 7.D rules (anchor, restricted weeks, abut-Days-Off for partial conflicts) to find the position that maximizes effective days off — or, if you've also entered Dates Desired Off, the best legal position that still keeps every one of those dates off. <em>Vacation workdays</em> are trip days covered by vacation. AWRD days are automatic whenever <strong>3 or fewer</strong> workdays remain on <em>either edge</em> of the pattern — before or after the vacation (per the Atlas Article 7 Vacation Adjustment form). Only one edge gets the AWRD block (the larger one, when both qualify); the other edge falls back to its own unconditional single automatic day: the workday immediately <em>before</em> the vacation off (25.K.3.a), or <em>R-1</em> home reserve immediately <em>after</em> it (Article 31.B) — for up to <strong>4 extra days off</strong> beyond the vacation. When an edge has 4 or more workdays and isn't the winning side, it only gets that single automatic day, and the rest are either flown as published or reassigned as secondary. <em>Note:</em> if the pairing transits base after an R-1 day, or a secondary assignment comes out shorter than the published trip, you may pick up further days off — that depends on Company assignment history the app has no way to see, so it is deliberately <strong>not</strong> counted here. Check those cases yourself. The Optimizer column shows: <span style="color:var(--gold)">AWRD: Xd</span> (award days earned, either edge), <span style="color:var(--gold)">R-1: 1d</span> (home-reserve day when the trailing edge didn't win AWRD), <em>Vac: Xd</em> (workdays covered), or <span style="color:#4ade80">No conflict</span> (vacation falls on already-off days). If a legal slide exists on the opposite side of the anchor within one effective day off of the winner, it's shown as <em>Alt</em> so you can pick your preferred direction. When the leading edge's workday run is longer than the 1 day actually scored, you'll also see <span style="color:#f97316;font-style:italic">Possible +Xd — LOC 25.K.3.a</span>: per the 2023 Letter of Clarification on 25.K.3.a, the Company may (at its option) convert the <em>entire</em> remaining leading portion of the trip pairing to Days Off rather than just the single guaranteed day — in practice this is likely whenever flying the rest of the pairing and deadheading back in time isn't realistic (e.g. anything but a short/domestic remaining leg). That depends on per-city deadhead routing and crew rest the app can't evaluate, so it's <strong>not</strong> added to the score — flagged only so you know to ask about it.</li>
                     <li><strong>Vacation adjustments Crew Planning applies automatically</strong> — Per LOC on 7.D.9 (May 2024) the Company automatically returns you to base no later than 0701z on the workday before your vacation and schedules R-1 (Home Reserve) on the first workday after your vacation ends (unless you opt out via Bidding by 1200z on the 20th). These are on top of the printed schedule, so your <em>actual</em> days off around vacation are usually one greater on each side than what the app shows from the bidline PDF.</li>
                     <li><strong>Early-arrival flag (0700z rule)</strong> — Atlas treats any day whose trip duty ends before 0700z as a Day Off. If your last vacation day happens to be the day a trip pairing arrives before 0700z, check the box under the vacation dates. This changes the classification from "fully conflicted" to "partially conflicted", which under 7.D.2.d restricts the slide to positions that abut a Day Off. Without this flag the app assumes your line's PDF X-markers are the complete off-day picture.</li>
                     <li><strong>60-day lines</strong> — Results are shown per bid period (BP1 / BP2) so you can see exactly which period each conflict affects.</li>
@@ -1516,7 +1521,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 </div>
                 <p>Avg Guarantee and Avg Days Off are averaged across bid periods so BP1 and 60-day lines are directly comparable. The days-off component is relative to the group average — lines above average score higher, lines below score lower.</p>
                 <p>Airport adjustments are relative to the spread (max − min) of base values in the filtered group, with diminishing returns for each additional matched airport (log₂ scale: 1 match = 10%, 2 = 15.8%, 3 = 20%).</p>
-                <p><strong>Conflict Mode scoring</strong> — For any bid period where training or vacation overlaps the schedule, the period score switches to: <em>Effective Days Off × Day Off Value</em>, where Effective Days Off = native off days + vacation workdays covered + award days (or the R-1 day) + the 25.K.3.a LOC day + training workdays covered − training off days consumed. This rewards lines that absorb conflicts into already-scheduled work and penalizes lines that consume your time off.</p>
+                <p><strong>Conflict Mode scoring</strong> — For any bid period where training or vacation overlaps the schedule, the period score switches to: <em>Effective Days Off × Day Off Value</em>, where Effective Days Off = native off days + vacation workdays covered + AWRD days (either edge) + the leading LOC day or trailing R-1 day (whichever edge didn't win AWRD) + training workdays covered − training off days consumed. This rewards lines that absorb conflicts into already-scheduled work and penalizes lines that consume your time off.</p>
                 <p><strong>Ranking Priority</strong> — Guarantee: days off ignored (0 hrs/day); Balanced: CRT contractual rate (4.85 hrs/day); Days Off: full overtime value (10.85 hrs/day).</p>
             </div>
         </div>
@@ -1539,7 +1544,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.12.0';
+        const APP_VERSION   = '1.13.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2651,27 +2656,44 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 for (const ci of covered) {
                     vacWorkdays += Math.round((ci.end - ci.start) / 86400000) + 1;
                 }
-                // Uncovered workdays at clipped trip edges. Leading edge is the 25.K.3.a
-                // LOC: only the SINGLE day immediately before the vacation is a guaranteed
-                // Day Off (days further left stay on the bidline at Company discretion).
-                // Trailing edge: the 7.D.7 Award Days election is available ONLY when 3 or
-                // fewer workdays remain after the vacation. With 4 or more it is
-                // unavailable — the first day back is R-1 home reserve (counted as a day
-                // off) and the rest are flown as published or reassigned as secondary.
-                // The run is measured against the UNCLIPPED trip end so a BP1/BP2 period
-                // boundary cannot make a long trailing run look short.
+                // Uncovered workdays at clipped trip edges. 7.D.7 AWRD days are automatic
+                // whenever 3 or fewer workdays remain on EITHER edge of the pattern — not
+                // just the trailing edge. Only one edge carries the (up to 3-day) AWRD
+                // block; the other falls back to its unconditional single automatic day
+                // (25.K.3.a LOC before / Art 31.B R-1 after). Both runs are measured
+                // against the UNCLIPPED trip start/end so a BP1/BP2 period boundary
+                // cannot make either run look artificially short.
                 const firstStart = covered[0].start;
                 const lastEnd    = covered[covered.length - 1].end;
                 const daysBefore = firstStart > tStart ? Math.round((firstStart - tStart) / 86400000) : 0;
                 const daysAfter  = lastEnd    < tEnd   ? Math.round((tEnd - lastEnd)      / 86400000) : 0;
-                const trailingRun = lastEnd < trip.end ? Math.round((trip.end - lastEnd) / 86400000) : 0;
-                locDaysOff += daysBefore > 0 ? 1 : 0;
-                if (trailingRun > 3) {
-                    // Only credit the R-1 day if it actually falls inside this period.
-                    if (daysAfter > 0) r1DaysOff = Math.max(r1DaysOff, 1);
+                const leadingRun  = firstStart > trip.start ? Math.round((firstStart - trip.start) / 86400000) : 0;
+                const trailingRun = lastEnd    < trip.end   ? Math.round((trip.end    - lastEnd)    / 86400000) : 0;
+
+                const leadingQualifies  = leadingRun  >= 1 && leadingRun  <= 3;
+                const trailingQualifies = trailingRun >= 1 && trailingRun <= 3;
+                let bigSide = null;
+                if (leadingQualifies && trailingQualifies) {
+                    bigSide = leadingRun > trailingRun ? 'leading' : 'trailing';
+                } else if (leadingQualifies) {
+                    bigSide = 'leading';
+                } else if (trailingQualifies) {
+                    bigSide = 'trailing';
+                }
+
+                if (bigSide === 'leading') {
+                    const lB = Math.min(leadingRun, Math.max(0, daysBefore));
+                    locDaysOff = Math.max(locDaysOff, lB);
                 } else {
+                    locDaysOff += daysBefore > 0 ? 1 : 0;
+                }
+
+                if (bigSide === 'trailing') {
                     const aB = Math.min(trailingRun, Math.max(0, daysAfter));
                     awardDays = Math.max(awardDays, aB);
+                } else if (trailingRun > 0) {
+                    // Only credit the R-1 day if it actually falls inside this period.
+                    if (daysAfter > 0) r1DaysOff = Math.max(r1DaysOff, 1);
                 }
             }
             return { vacWorkdays, awardDays, locDaysOff, r1DaysOff };
@@ -2832,55 +2854,91 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 }
             }
 
-            // 25.K.3.a LOC: only the SINGLE day immediately before the vacation is a
-            // guaranteed Day Off (or deadhead home), and only when it is a scheduled
-            // workday. Days further to the left stay on the awarded bidline at the
-            // Company's discretion — a shorter pairing (e.g. MIA-BOG-MIA) can be
-            // substituted — so they are NOT credited as days off.
-            let locDaysOff = 0;
-            const locRanges = [];
-            const locDay = addDays(slideStart, -1);
-            if (isWork(locDay)) {
-                locDaysOff = 1;
-                locRanges.push({ start: new Date(locDay), end: new Date(locDay) });
+            // 7.D.7 AWRD days are automatic whenever 3 or fewer workdays remain on
+            // EITHER edge of the pattern — before or after the vacation, not just
+            // after (per the Atlas Article 7 Vacation Adjustment form: "AWRD days are
+            // automatic when there are three or fewer workdays either before or after
+            // your vacation"). Only one edge may carry the (up to 3-day) AWRD block —
+            // "you may only have one set of Award Days, either before or after your
+            // vacation." The other edge falls back to its own unconditional single
+            // automatic day: 25.K.3.a LOC before the vacation, Art 31.B R-1 after.
+            // Count each run first. Leading is NOT capped: beyond the ≤3 AWRD
+            // threshold, the run length still matters for display — see
+            // leadingRunFull below (25.K.3.a can, per the 2023 LOC, convert the
+            // WHOLE remaining leading portion to Days Off at the Company's
+            // option, whenever flying the remainder and deadheading back in time
+            // isn't operationally feasible — not modelled in the score since that
+            // depends on per-city deadhead/rest feasibility the app can't see,
+            // but worth flagging as unscored upside).
+            let leadingRun = 0;
+            for (let ad = addDays(slideStart, -1); isWork(ad); ad = addDays(ad, -1)) {
+                leadingRun++;
             }
-
-            // 7.D.7 Award Days are "up to 3 workdays at the trailing edge" — an election
-            // that exists only when 3 or fewer workdays actually remain after the
-            // vacation, NOT the first 3 days of a longer run. When 4 or more remain the
-            // election is unavailable: the first day back becomes R-1 home reserve
-            // (Art 31.B — the Crew Member is at home and merely contactable, so it counts
-            // as a day off), and the remaining days are either flown as published (if the
-            // pairing transits base after the R-1) or reassigned as secondary. Which of
-            // those two applies cannot be modelled without Company assignment history, and
-            // both are workdays, so neither adds days off here. Count the full trailing
-            // run first, then decide.
             let trailingRun = 0;
             for (let ad = addDays(slideEnd, 1); isWork(ad); ad = addDays(ad, 1)) {
                 trailingRun++;
                 if (trailingRun > 3) break;   // 4+ disqualifies the election; stop counting
             }
 
+            const leadingQualifies  = leadingRun  >= 1 && leadingRun  <= 3;
+            const trailingQualifies = trailingRun >= 1 && trailingRun <= 3;
+            let bigSide = null;
+            if (leadingQualifies && trailingQualifies) {
+                // Both edges qualify — CBA form has the crew member choose; the search
+                // isn't given a per-request preference, so take the larger benefit
+                // (ties keep the prior trailing-edge default).
+                bigSide = leadingRun > trailingRun ? 'leading' : 'trailing';
+            } else if (leadingQualifies) {
+                bigSide = 'leading';
+            } else if (trailingQualifies) {
+                bigSide = 'trailing';
+            }
+
+            // Leading edge: either the full AWRD block (25.K.3.a is subsumed by 7.D.7
+            // when the block wins this edge) or the unconditional single LOC day.
+            let locDaysOff = 0;
+            const locRanges = [];
+            if (bigSide === 'leading') {
+                const awardStart = addDays(slideStart, -leadingRun);
+                const awardEnd   = addDays(slideStart, -1);
+                // AWRD days may not fall in an Article 7 restricted week (same rule
+                // applied to the trailing block below).
+                if (restrictedWeeksIn(awardStart, awardEnd).size === 0) {
+                    locDaysOff = leadingRun;
+                    locRanges.push({ start: awardStart, end: awardEnd });
+                }
+            } else if (leadingRun > 0) {
+                // Mandatory, not a discretionary election — NOT restricted-week gated.
+                const locDay = addDays(slideStart, -1);
+                locDaysOff = 1;
+                locRanges.push({ start: new Date(locDay), end: new Date(locDay) });
+            }
+
+            // Trailing edge: either the full AWRD block, or R-1 home reserve (Art 31.B
+            // — the Crew Member is at home and merely contactable, so it counts as a
+            // day off) for the single first day back, with the remaining days either
+            // flown as published (if the pairing transits base after the R-1) or
+            // reassigned as secondary. Which of those two applies cannot be modelled
+            // without Company assignment history, and both are workdays, so neither
+            // adds days off here.
             let awardDays = 0;
             let awardRange = null;
             let r1DaysOff = 0;
             const r1Ranges = [];
-            if (trailingRun > 3) {
-                // Mandatory reserve status, not a discretionary election — so unlike the
-                // 7.D.7 award it is NOT gated by restricted weeks (same as the LOC day).
+            if (bigSide === 'trailing') {
+                const awardStart = addDays(slideEnd, 1);
+                const awardEnd   = addDays(slideEnd, trailingRun);
+                // Award days may not fall in an Article 7 restricted week.
+                if (restrictedWeeksIn(awardStart, awardEnd).size === 0) {
+                    awardDays = trailingRun;
+                    awardRange = { start: awardStart, end: awardEnd, side: 'after' };
+                }
+            } else if (trailingRun > 0) {
+                // Mandatory, not a discretionary election — NOT restricted-week gated
+                // (same as the LOC day).
                 const r1Day = addDays(slideEnd, 1);
                 r1DaysOff = 1;
                 r1Ranges.push({ start: new Date(r1Day), end: new Date(r1Day) });
-            } else if (trailingRun > 0) {
-                awardDays = trailingRun;
-                const awardStart = addDays(slideEnd, 1);
-                const awardEnd   = addDays(slideEnd, awardDays);
-                // Award days may not fall in an Article 7 restricted week.
-                if (restrictedWeeksIn(awardStart, awardEnd).size > 0) {
-                    awardDays = 0;
-                } else {
-                    awardRange = { start: awardStart, end: awardEnd, side: 'after' };
-                }
             }
 
             return {
@@ -2891,7 +2949,14 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 r1DaysOff,
                 r1Ranges,
                 effectiveDaysOff: naturalOff + vacWorkdays + awardDays + locDaysOff + r1DaysOff,
-                awardRange
+                awardRange,
+                // Unscored upside: the full leading-edge workday run, for the
+                // "possible LOC" callout. Equals locDaysOff whenever the leading
+                // edge already won the AWRD block (or is 0) — only exceeds it
+                // when leadingRun > 3 disqualified the block and fell back to
+                // the 1-day baseline, leaving leadingRunFull - locDaysOff days
+                // of unscored Company-discretion potential.
+                leadingRunFull: leadingRun
             };
         }
 
@@ -2927,17 +2992,26 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         //   7.D.2.f.ii — 30/60-day lines may slide into subsequent Bid Month (past schedule end)
         //   7.D.4   — fully conflicted may slide either direction (with anchor)
         //   7.D.5   — restricted weeks: may slide OUT of, but NOT INTO
-        //   7.D.7   — Award Days: ≤3 workdays at the trailing edge, taken immediately after the
-        //     vacation. Best practice: slide so exactly 3 trip workdays remain after the vacation.
-        //   25.K.3.a — LOC: only the SINGLE day immediately before the vacation converts to a Day
-        //     Off/deadhead. Days further left stay on the bidline at Company discretion (a shorter
-        //     pairing may be substituted), so they are not credited. Net optimal bonus = 1 (LOC) +
-        //     3 (Award) = 4 days off beyond the vacation itself.
+        //   7.D.7   — AWRD days are automatic whenever 3 or fewer workdays remain on EITHER
+        //     edge of the pattern (before or after the vacation) — per the Atlas Article 7
+        //     Vacation Adjustment form. Only one edge carries the block ("only one set of
+        //     Award Days, either before or after"); the other edge falls back to its own
+        //     unconditional single automatic day. Best practice: slide so exactly 3 trip
+        //     workdays remain on whichever edge is closer.
+        //   25.K.3.a / Art 31.B — the unconditional single-day fallback: the day immediately
+        //     before the vacation (LOC/deadhead) or immediately after it (R-1 home reserve)
+        //     comes off automatically when that edge didn't win the AWRD block above. Days
+        //     further out stay on the bidline at Company discretion, so they are not
+        //     credited. Net optimal bonus = 3 (AWRD) + 1 (LOC or R-1 on the other edge) =
+        //     4 days off beyond the vacation itself.
         //
         // opts:
         //   lastVacDayEffectivelyOff — bool. See Fix A: user asserts trip arrival on the last
         //     vacation day is before 0700z, so that day is functionally a Day Off (Trent's rule).
         //     Also affects partial-vs-full classification.
+        //   desiredDates — Date[]. When given, the search prefers any legal slide position
+        //     that keeps every one of these dates off over the position that purely
+        //     maximizes effective days off — see the "Days Desired Off" priority below.
         function computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, opts = {}) {
             const vacLength = daysBetween(vacStart, vacEnd) + 1;
 
@@ -3028,9 +3102,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             //   2) on a tie, the LATEST position wins — this abuts the vacation to the
             //      trailing 7.D.7 Award Days and pushes the remaining workdays to the
             //      front of the trip, i.e. the best-practice placement that yields the
-            //      largest single contiguous block off. (Days Desired Off is enforced as
-            //      an absolute pre-filter, so a surviving line already keeps those dates
-            //      off regardless of where inside the anchor the block lands.)
+            //      largest single contiguous block off.
             const rank = (a, b) => {
                 if (a.r.effectiveDaysOff !== b.r.effectiveDaysOff) return b.r.effectiveDaysOff - a.r.effectiveDaysOff;
                 if (a.sStart.getTime()   !== b.sStart.getTime())   return b.sStart - a.sStart;
@@ -3047,17 +3119,42 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             }
 
             positions.sort(rank);
-            // Only recommend a slide when some position STRICTLY beats staying put.
-            // If the awarded position already ties the max effective days off, don't
-            // churn the dates — a slide that gains nothing (e.g. vacation entirely on
-            // off-days, or a trip fully consumed either way) should read "no slide".
             const originPos = positions.find(p => p.direction === 'origin') || {
                 sStart: new Date(vacStart), sEnd: new Date(vacEnd),
                 r: originEval, direction: 'origin', distanceFromOrig: 0
             };
-            const best = positions[0].r.effectiveDaysOff > originEval.effectiveDaysOff
-                ? positions[0]
-                : originPos;
+
+            // Days Desired Off takes priority over raw days-off maximizing: a legal
+            // slide that keeps the pilot's requested dates off should be picked over
+            // the higher-scoring slide the unconstrained search would otherwise pick,
+            // so the line stays in results (ranked on its actual score) instead of
+            // being dropped just because the best-scoring slide lands elsewhere.
+            const desiredDates = opts.desiredDates || [];
+            const coversDesired = (pos) => desiredDates.length > 0 && desiredDates.every(d => {
+                if (d >= pos.sStart && d <= pos.sEnd) return true;
+                if (pos.r.locRanges && pos.r.locRanges.some(rg => d >= rg.start && d <= rg.end)) return true;
+                if (pos.r.awardRange && d >= pos.r.awardRange.start && d <= pos.r.awardRange.end) return true;
+                if (pos.r.r1Ranges && pos.r.r1Ranges.some(rg => d >= rg.start && d <= rg.end)) return true;
+                return false;
+            });
+            const qualifying = desiredDates.length > 0 ? positions.filter(coversDesired) : [];
+
+            // Only recommend a slide when some position STRICTLY beats staying put.
+            // If the awarded position already ties the max effective days off, don't
+            // churn the dates — a slide that gains nothing (e.g. vacation entirely on
+            // off-days, or a trip fully consumed either way) should read "no slide".
+            let best;
+            if (qualifying.length > 0) {
+                // originPos already covering the desired dates and scoring at least as
+                // well as the best qualifying slide wins outright — no need to churn.
+                best = (coversDesired(originPos) && originEval.effectiveDaysOff >= qualifying[0].r.effectiveDaysOff)
+                    ? originPos
+                    : qualifying[0];
+            } else {
+                best = positions[0].r.effectiveDaysOff > originEval.effectiveDaysOff
+                    ? positions[0]
+                    : originPos;
+            }
 
             // Fix 2b: best alternative on the OPPOSITE side of the anchor from `best`.
             // Surface it when it comes within 1 effective day off of the winner (close call).
@@ -3089,6 +3186,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 vacWorkdays:             best.r.vacWorkdays,
                 locDaysOff:              best.r.locDaysOff,
                 locRanges:               best.r.locRanges || [],
+                // Unscored leading-edge upside (25.K.3.a, Company discretion) —
+                // see evalVacPosition. locDaysOff is what's actually scored;
+                // leadingRunFull - locDaysOff is the unscored potential.
+                leadingRunFull:          best.r.leadingRunFull || 0,
                 r1DaysOff:               best.r.r1DaysOff || 0,
                 r1Ranges:                best.r.r1Ranges  || [],
                 // Fix E: always return the chosen window (even when equal to original)
@@ -3374,11 +3475,24 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
                     // ── Vacation per-period scoring ──────────────────────────────
                     if (vacMode && vacationRanges.length > 0 && bidlineInfo) {
+                        // Desired dates not already satisfied natively (X-marked or past
+                        // scheduleEnd) are candidates the vacation slide needs to cover.
+                        // Passed through so computeVacationScore can prefer a legal slide
+                        // position that keeps the pilot's requested dates off over the
+                        // position that purely maximizes effective days off — a line
+                        // shouldn't be dropped from results just because the highest-scoring
+                        // slide happens to land somewhere other than the requested dates.
+                        const outstandingDesired = desiredDates.filter(d =>
+                            !(d > schedEnd) &&
+                            !lineDatesOff.some(off => sameDay(off, d))
+                        );
+
                         // Optimise each vacation range independently using ALL trips.
                         // Pass through the per-range 0700z-arrival flag (Fix A).
                         const rangeScores = vacationRanges.map(vr =>
                             computeVacationScore(lineTrips, lineDatesOff, schedEnd, vr.start, vr.end, {
-                                lastVacDayEffectivelyOff: !!vr.lastVacDayEffectivelyOff
+                                lastVacDayEffectivelyOff: !!vr.lastVacDayEffectivelyOff,
+                                desiredDates: outstandingDesired
                             })
                         );
 
@@ -3433,8 +3547,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     //   2. It falls after the line's schedule end (Company hasn't scheduled it)
                     //   3. It falls within a chosen vacation window (all periods, per Fix E — even
                     //      when the "chosen" window equals the original, i.e. no slide happened)
-                    //   4. It falls within a slide-generated Award Day range (Fix 2a)
-                    //   5. It falls within a 25.K.3.a LOC range (mandatory pre-vacation trim)
+                    //   4. It falls within a slide-generated AWRD Day range (Fix 2a) — either edge
+                    //   5. It falls within the leading-edge LOC range (25.K.3.a fallback day)
                     let allDatesOff = true;
 
                     if (desiredDates.length > 0) {
@@ -3728,12 +3842,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
                 }
 
-                // Vacation edges: under 25.K.3.a only the SINGLE day immediately before the
-                // vacation comes off (days further left stay on the bidline at Company
-                // discretion). At the trailing edge the 7.D.7 Award Days election applies
-                // only when 3 or fewer workdays remain; with 4 or more the first day back
-                // is R-1 home reserve (a day off) and the rest are flown as published or
-                // reassigned as secondary.
+                // Vacation edges: 7.D.7 AWRD days are automatic whenever 3 or fewer
+                // workdays remain on EITHER edge — only one edge carries the (up to
+                // 3-day) block, the other falls back to its own unconditional single
+                // automatic day (25.K.3.a LOC before / Art 31.B R-1 after).
                 if (hasVac) {
                     const firstEx = merged[0];
                     const lastEx  = merged[merged.length - 1];
@@ -3741,12 +3853,26 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         ? Math.round((firstEx.start.getTime() - trip.start.getTime()) / 86400000) : 0;
                     const daysAfter  = lastEx.end < trip.end
                         ? Math.round((trip.end.getTime() - lastEx.end.getTime()) / 86400000) : 0;
-                    if (daysBefore > 0) {
-                        const locDay = new Date(firstEx.start.getTime() - 86400000);
-                        merged.unshift({ start: locDay, end: new Date(locDay) });
+
+                    const leadingQualifies  = daysBefore >= 1 && daysBefore <= 3;
+                    const trailingQualifies = daysAfter  >= 1 && daysAfter  <= 3;
+                    let bigSide = null;
+                    if (leadingQualifies && trailingQualifies) {
+                        bigSide = daysBefore > daysAfter ? 'leading' : 'trailing';
+                    } else if (leadingQualifies) {
+                        bigSide = 'leading';
+                    } else if (trailingQualifies) {
+                        bigSide = 'trailing';
                     }
-                    // 4+ trailing workdays → 1 R-1 day off; 1-3 → that many award days.
-                    const trailingOff = daysAfter > 3 ? 1 : Math.max(0, daysAfter);
+
+                    const leadingOff = bigSide === 'leading' ? daysBefore : (daysBefore > 0 ? 1 : 0);
+                    if (leadingOff > 0) {
+                        merged.unshift({
+                            start: new Date(firstEx.start.getTime() - leadingOff * 86400000),
+                            end:   new Date(firstEx.start.getTime() - 86400000)
+                        });
+                    }
+                    const trailingOff = bigSide === 'trailing' ? daysAfter : (daysAfter > 0 ? 1 : 0);
                     if (trailingOff > 0) {
                         merged.push({
                             start: new Date(lastEx.end.getTime() + 86400000),
@@ -3837,9 +3963,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             }
 
             // Slide display for each vacation range.
-            // Show the chosen slide, then any LOC (25.K.3.a, leading edge) / AWRD
-            // (7.D.7, trailing edge) days, then any legal alternative on the opposite
-            // side of the anchor within 1 day of the
+            // Show the chosen slide, then any LOC/R-1 fallback day (whichever edge
+            // didn't win AWRD) and AWRD days (7.D.7, either edge), then any legal
+            // alternative on the opposite side of the anchor within 1 day of the
             // winner's score — lets the pilot pick when direction preference matters.
             if (vacMode && vacScore && vacScore.rangeScores) {
                 vacScore.rangeScores.forEach(rs => {
@@ -3858,6 +3984,15 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         if (alt.awardRange)     tags.push(`AWRD ${alt.awardRange.side}`);
                         const sideTag = tags.length ? ` <span style="opacity:.7">(${tags.join(', ')})</span>` : '';
                         push(`<span class="opt-line opt-slide" style="opacity:.75">Alt (${alt.direction}): ${fmtDate(alt.slideStart)}–${fmtDate(alt.slideEnd)}${sideTag}</span>`);
+                    }
+                    // Unscored upside: the leading edge sits on a much longer trip-pairing
+                    // remainder than the scored 1-day LOC credits. Per the 2023 LOC on
+                    // 25.K.3.a, the Company MAY convert the whole remainder to Days Off —
+                    // not guaranteed (depends on deadhead/crew-rest feasibility the app
+                    // can't evaluate), so flagged as potential, not added to the score.
+                    const potential = (rs.leadingRunFull || 0) - (rs.locDaysOff || 0);
+                    if (potential > 0) {
+                        push(`<span class="opt-line opt-potential">Possible +${potential}d — LOC 25.K.3.a (Company discretion, not guaranteed)</span>`);
                     }
                 });
             }
@@ -3993,7 +4128,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     const slide = r.vacScore.recommendedSlideStart
                         ? `Slide: ${fmtDate(r.vacScore.recommendedSlideStart)}-${fmtDate(r.vacScore.recommendedSlideEnd)}`
                         : 'No slide';
-                    optInfo = `"LOC:${r.vacScore.locDaysOff || 0} | AWRD:${r.vacScore.awardDays} | R-1:${r.vacScore.r1DaysOff || 0} | EffOff:${r.vacScore.effectiveDaysOff} | ${slide}"`;
+                    const potential = (r.vacScore.rangeScores || [])
+                        .reduce((sum, rs) => sum + Math.max(0, (rs.leadingRunFull || 0) - (rs.locDaysOff || 0)), 0);
+                    const potentialInfo = potential > 0 ? ` | Possible LOC:+${potential}d` : '';
+                    optInfo = `"LOC:${r.vacScore.locDaysOff || 0} | AWRD:${r.vacScore.awardDays} | R-1:${r.vacScore.r1DaysOff || 0} | EffOff:${r.vacScore.effectiveDaysOff} | ${slide}${potentialInfo}"`;
                 } else if (r.trainMode && r.trainScore) {
                     const compliance = r.trainScore.isNone ? 'off days' : r.trainScore.isPartial ? 'partial' : 'full';
                     optInfo = `"Train:${r.trainScore.overlapDays}/${r.trainScore.totalTrainingDays}(${compliance}) Buffer:${r.trainScore.bufferDays}"`;

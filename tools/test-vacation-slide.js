@@ -345,14 +345,15 @@ function assertNull(name, actual) {
   const trips = [ trip(2026, 7, 20, 7, 28) ]; // 9-day trip: 7/20-7/28
 
   // Leading-edge case: window 7/22-7/28 covers the LAST 7 days of the trip, leaving
-  // 2 workdays before (7/20, 7/21). Under 25.K.3.a ONLY the single day immediately
-  // before the vacation (7/21) is a guaranteed Day Off — 7/20 stays on the bidline.
+  // 2 workdays before (7/20, 7/21) — 2 <= 3, so per 7.D.7 ("AWRD days are automatic
+  // when there are three or fewer workdays either before or after your vacation")
+  // BOTH days become the AWRD block, not just the single 25.K.3.a day.
   const r = slide.evalVacPosition(D(2026,7,22), D(2026,7,28), trips, 0);
-  check('2a-1 locRanges array populated for the 1-day leading trim',
+  check('2a-1 locRanges array populated for the leading AWRD block',
     Array.isArray(r.locRanges) && r.locRanges.length === 1,
     `locRanges = ${JSON.stringify(r.locRanges)}`);
-  check('2a-2 locDaysOff = 1 (only 7/21, the day immediately before the vacation)',
-    r.locDaysOff === 1, `locDaysOff = ${r.locDaysOff}`);
+  check('2a-2 locDaysOff = 2 (both 7/20 and 7/21 qualify as the leading AWRD block)',
+    r.locDaysOff === 2, `locDaysOff = ${r.locDaysOff}`);
   check('2a-3 no 7.D.7 award range on this trip (no trailing edge)',
     r.awardRange === null && r.awardDays === 0,
     `awardRange = ${JSON.stringify(r.awardRange)}, awardDays = ${r.awardDays}`);
@@ -509,6 +510,122 @@ function assertNull(name, actual) {
     bp1.r1DaysOff === 1, `r1DaysOff = ${bp1.r1DaysOff}`);
   check('c10 period-clipped trip: vacation workdays still attributed (Aug 28-30)',
     bp1.vacWorkdays === 3, `vacWorkdays = ${bp1.vacWorkdays}`);
+})();
+
+// ─── 7.D.7 AWRD on the LEADING edge, not just trailing ───────────────────────
+// Reported case: ORD 747 FO, Oct 2026 bid. Pilot has vacation Oct 18-24 and
+// wants Oct 15-19 off. Lines 4117 (single pairing Oct 15 - Nov 1) and 4119
+// (single pairing Oct 14-28) were being dropped from results entirely: the
+// old model only ever gave the leading edge a single 25.K.3.a day, so the
+// unconstrained days-off search always chased the trailing-edge AWRD block
+// instead, landing near month-end — nowhere near the requested dates.
+//
+// The Atlas "Article 7 Vacation Adjustment" form confirms AWRD is symmetric:
+// "AWRD days are automatic when there are three or fewer workdays either
+// before or after your vacation" — only one edge gets the (up to 3-day)
+// block. Once evalVacPosition offers that block on the leading edge too, the
+// pilot's own math holds without needing any desiredDates workaround:
+//   - 4117 needs NO slide at all — Oct 15-17 (3 workdays before the awarded
+//     Oct 18-24 vacation) become AWRD automatically, R-1 lands on Oct 25, and
+//     the position ties the best unconstrained score (25), so the
+//     no-churn rule keeps the pilot at his awarded position.
+//   - 4119's awarded position has 4 workdays on both edges (neither ≤3), so a
+//     1-day slide to Oct 17-23 is genuinely better: it drops the leading run
+//     to exactly 3 (Oct 14-16 -> AWRD), R-1 lands Oct 24, and effective days
+//     off rises from 25 (unslid) to 27.
+// Both lines now surface in a Dates Desired Off search for Oct 15-19 without
+// needing the search to fall back to a suboptimal, desiredDates-only pick.
+(function testLeadingEdgeAward() {
+  const vacStart = D(2026,10,18), vacEnd = D(2026,10,24);
+
+  // 4117: X Oct 1-14, single pairing Oct 15 - Nov 1.
+  const datesOff4117 = [];
+  for (let d = 1; d <= 14; d++) datesOff4117.push(D(2026,10,d));
+  const trips4117 = [ trip(2026,10,15, 11,1) ];
+  const r4117 = slide.computeVacationScore(trips4117, datesOff4117, D(2026,11,1), vacStart, vacEnd, {});
+  check('le1 4117: no slide needed (ties the unconstrained optimum at the awarded position)',
+    !r4117.isSlid && slide.sameDay(r4117.chosenSlideStart, D(2026,10,18)),
+    `isSlid=${r4117.isSlid}, slide ${fmt(r4117.chosenSlideStart)} -> ${fmt(r4117.chosenSlideEnd)}`);
+  check('le2 4117: leading AWRD block is Oct 15-17 (3d), R-1 on Oct 25',
+    r4117.locDaysOff === 3 && r4117.locRanges.length === 1 &&
+      slide.sameDay(r4117.locRanges[0].start, D(2026,10,15)) && slide.sameDay(r4117.locRanges[0].end, D(2026,10,17)) &&
+      r4117.r1DaysOff === 1 && slide.sameDay(r4117.r1Ranges[0].start, D(2026,10,25)),
+    `locDaysOff=${r4117.locDaysOff}, locRanges=${JSON.stringify(r4117.locRanges)}, r1DaysOff=${r4117.r1DaysOff}, r1Ranges=${JSON.stringify(r4117.r1Ranges)}`);
+  check('le3 4117: effectiveDaysOff = 25 (14 natural + 7 vacation + 3 AWRD + 1 R-1)',
+    r4117.effectiveDaysOff === 25, `effectiveDaysOff = ${r4117.effectiveDaysOff}`);
+
+  // 4119: X Oct 1-13, single pairing Oct 14-28, X Oct 29-31.
+  const datesOff4119 = [];
+  for (let d = 1; d <= 13; d++) datesOff4119.push(D(2026,10,d));
+  for (let d = 29; d <= 31; d++) datesOff4119.push(D(2026,10,d));
+  const trips4119 = [ trip(2026,10,14, 10,28) ];
+
+  // Unconstrained: the unslid position has 4 workdays on BOTH edges (neither
+  // qualifies), but sliding right to Oct 19-25 drops the trailing run to
+  // exactly 3 (Oct 26-28 -> AWRD) for effectiveDaysOff 27. Sliding left to
+  // Oct 17-23 instead (leading run drops to 3, Oct 14-16 -> AWRD) ties at the
+  // same 27 — the tiebreak (latest position wins) picks Oct 19-25.
+  const r4119 = slide.computeVacationScore(trips4119, datesOff4119, D(2026,11,1), vacStart, vacEnd, {});
+  check('le4 4119: unconstrained optimum slides right to Oct 19-25 (trailing AWRD, tiebreak favors latest)',
+    r4119.isSlid && slide.sameDay(r4119.chosenSlideStart, D(2026,10,19)) && slide.sameDay(r4119.chosenSlideEnd, D(2026,10,25)),
+    `isSlid=${r4119.isSlid}, slide ${fmt(r4119.chosenSlideStart)} -> ${fmt(r4119.chosenSlideEnd)}`);
+  check('le5 4119: effectiveDaysOff = 27 (16 natural + 7 vacation + 3 AWRD + 1 LOC), up from 25 unslid',
+    r4119.effectiveDaysOff === 27, `effectiveDaysOff = ${r4119.effectiveDaysOff}`);
+
+  // With the pilot's actual Dates Desired Off (Oct 15-19) supplied, the tie
+  // resolves the other way: Oct 19-25 doesn't cover Oct 15-17, but the
+  // equally-scoring Oct 17-23 does (leading AWRD Oct 14-16, R-1 Oct 24) — this
+  // is the exact position the pilot described.
+  const desiredOct1519 = [D(2026,10,15), D(2026,10,16), D(2026,10,17), D(2026,10,18), D(2026,10,19)];
+  const r4119steered = slide.computeVacationScore(trips4119, datesOff4119, D(2026,11,1), vacStart, vacEnd, { desiredDates: desiredOct1519 });
+  check('le6 4119: with Dates Desired Off Oct 15-19, chosen slide is Oct 17-23',
+    slide.sameDay(r4119steered.chosenSlideStart, D(2026,10,17)) && slide.sameDay(r4119steered.chosenSlideEnd, D(2026,10,23)),
+    `slide ${fmt(r4119steered.chosenSlideStart)} -> ${fmt(r4119steered.chosenSlideEnd)}`);
+  check('le7 4119: that position has leading AWRD Oct 14-16 (3d) and R-1 on Oct 24, still eff 27',
+    r4119steered.locDaysOff === 3 && r4119steered.locRanges.length === 1 &&
+      slide.sameDay(r4119steered.locRanges[0].start, D(2026,10,14)) && slide.sameDay(r4119steered.locRanges[0].end, D(2026,10,16)) &&
+      r4119steered.r1DaysOff === 1 && slide.sameDay(r4119steered.r1Ranges[0].start, D(2026,10,24)) &&
+      r4119steered.effectiveDaysOff === 27,
+    `locDaysOff=${r4119steered.locDaysOff}, locRanges=${JSON.stringify(r4119steered.locRanges)}, r1Ranges=${JSON.stringify(r4119steered.r1Ranges)}, eff=${r4119steered.effectiveDaysOff}`);
+})();
+
+// ─── Days Desired Off must be able to steer the slide, not just gate on it ───
+// le6/le7 above already pin the case where a legal, equally-scoring position
+// exists that satisfies desiredDates — the search must pick it over the
+// tiebreak-default position. This block covers the other two edges of that
+// behavior: (a) when NO legal position can satisfy every requested date, the
+// search must fall back cleanly to the unconstrained optimum rather than
+// erroring or returning something worse for no reason, and (b) omitting
+// desiredDates entirely must reproduce prior behavior exactly.
+(function testDesiredDatesFallback() {
+  // Vacation length 7 (Oct 20-26); anchor limits the earliest legal window
+  // start to Oct 14, and the trip starts Oct 10 (4 workdays before Oct 14 —
+  // one too many to ever qualify for a leading AWRD block reaching back to
+  // it). Desired dates Oct 12-16 are therefore contractually unreachable by
+  // any legal slide position.
+  const datesOff = [ D(2026,10,1), D(2026,10,2), D(2026,10,3), D(2026,10,4), D(2026,10,5),
+    D(2026,10,6), D(2026,10,7), D(2026,10,8), D(2026,10,9) ];
+  const trips = [ trip(2026,10,10, 11,15) ];
+  const scheduleEnd = D(2026,11,15);
+  const vacStart = D(2026,10,20), vacEnd = D(2026,10,26);
+  const desired = [D(2026,10,12), D(2026,10,13), D(2026,10,14), D(2026,10,15), D(2026,10,16)];
+
+  const unconstrained = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, {});
+  const steered = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, { desiredDates: desired });
+
+  check('dd1 sanity: the unconstrained optimum does NOT cover the (unreachable) desired dates',
+    !desired.every(d => d >= unconstrained.chosenSlideStart && d <= unconstrained.chosenSlideEnd),
+    `unconstrained slide ${fmt(unconstrained.chosenSlideStart)} -> ${fmt(unconstrained.chosenSlideEnd)}`);
+  check('dd2 no legal position can satisfy them either -> falls back to the unconstrained optimum',
+    slide.sameDay(steered.chosenSlideStart, unconstrained.chosenSlideStart) &&
+      slide.sameDay(steered.chosenSlideEnd, unconstrained.chosenSlideEnd) &&
+      steered.effectiveDaysOff === unconstrained.effectiveDaysOff,
+    `steered slide ${fmt(steered.chosenSlideStart)} -> ${fmt(steered.chosenSlideEnd)}, eff=${steered.effectiveDaysOff} vs unconstrained eff=${unconstrained.effectiveDaysOff}`);
+  const noOptsAtAll = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd);
+  check('dd3 omitting opts entirely reproduces the unconstrained optimum unchanged',
+    slide.sameDay(noOptsAtAll.chosenSlideStart, unconstrained.chosenSlideStart) &&
+      noOptsAtAll.effectiveDaysOff === unconstrained.effectiveDaysOff,
+    `no-opts slide ${fmt(noOptsAtAll.chosenSlideStart)}, eff=${noOptsAtAll.effectiveDaysOff}`);
 })();
 
 // ─── Report ─────────────────────────────────────────────────────────────────
