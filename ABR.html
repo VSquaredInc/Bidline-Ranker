@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.14.2';
+        const APP_VERSION   = '1.14.3';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -1610,8 +1610,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
         function setupDateRangeInputs(startEl, endEl) {
             function defaultStartValue() {
                 if (bidPeriodStart) return toISODate(bidPeriodStart);
+                // Bid packages always cover the month(s) after the current one, so
+                // before the bidline PDF has been parsed (bidPeriodStart not yet
+                // known), open to next month rather than the current month.
                 const now = new Date();
-                return toISODate(new Date(now.getFullYear(), now.getMonth(), 1));
+                return toISODate(new Date(now.getFullYear(), now.getMonth() + 1, 1));
             }
 
             startEl.addEventListener('focus', function() {
