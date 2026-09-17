@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.14.0';
+        const APP_VERSION   = '1.14.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3072,6 +3072,33 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 }
             }
             const isPartiallyConflicted = effectiveVacWorkdays > 0 && effectiveVacWorkdays < vacLength;
+
+            // Union slide rule 5: a vacation that falls entirely on days already off has
+            // no conflict to slide against — "the slide is not useful," and it may NOT be
+            // moved onto nearby workdays anyway just because the anchor rule would allow
+            // it. Short-circuit to the origin position; no search, no recommendation.
+            if (effectiveVacWorkdays === 0) {
+                return {
+                    effectiveDaysOff:        origEval.effectiveDaysOff,
+                    awardDays:               origEval.awardDays,
+                    vacWorkdays:             origEval.vacWorkdays,
+                    locDaysOff:              origEval.locDaysOff,
+                    locRanges:               origEval.locRanges || [],
+                    leadingRunFull:          origEval.leadingRunFull || 0,
+                    r1DaysOff:               origEval.r1DaysOff || 0,
+                    r1Ranges:                origEval.r1Ranges || [],
+                    chosenSlideStart:        new Date(vacStart),
+                    chosenSlideEnd:          new Date(vacEnd),
+                    recommendedSlideStart:   null,
+                    recommendedSlideEnd:     null,
+                    isSlid:                  false,
+                    awardRanges:             origEval.awardRange ? [origEval.awardRange] : [],
+                    awardSide:               origEval.awardRange ? origEval.awardRange.side : null,
+                    alternative:             null,
+                    naturalOff,
+                    isPartiallyConflicted:   false
+                };
+            }
 
             // 7.D.2.c cap: partial-conflicted slide may not go past first full-conflict position.
             // NB: we search both directions and cap independently — the CBA's directional wording

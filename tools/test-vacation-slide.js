@@ -628,6 +628,45 @@ function assertNull(name, actual) {
     `no-opts slide ${fmt(noOptsAtAll.chosenSlideStart)}, eff=${noOptsAtAll.effectiveDaysOff}`);
 })();
 
+// ─── Union slide rule 5: zero-conflict vacation must never slide ────────────
+// Reported by the domain owner 2026-09-17 (alongside rules 1-4, all of which
+// already matched): "If vacation falls fully on Days Off, then the Slide is
+// not useful. You cannot slide vacation with no conflict to days on even if
+// maintaining an anchor." Before this fix, computeVacationScore only special-
+// cased the PARTIAL-conflict branch (7.D.2.c cap) and otherwise ran the full
+// anchor-bounded search unconditionally — which covers rule 3 (full conflict,
+// correctly unrestricted) but wrongly also covered the zero-conflict case,
+// letting the optimizer "discover" that sliding onto nearby workdays raises
+// effectiveDaysOff and recommend it. That's exactly what rule 5 forbids.
+(function testRule5NoConflictNoSlide() {
+  // Natural off Oct 1-7 and Oct 21-30, single 13-day trip Oct 8-20. Vacation
+  // is awarded at Oct 1-7 — it exactly matches the natural off block, so it
+  // has ZERO workdays inside it (no conflict at all) despite sitting right
+  // next to a trip that a slide could reach within the anchor rule.
+  const datesOff = [];
+  for (let d = 1; d <= 7; d++)  datesOff.push(D(2026,10,d));
+  for (let d = 21; d <= 30; d++) datesOff.push(D(2026,10,d));
+  const trips = [ trip(2026,10,8, 10,20) ];
+  const scheduleEnd = D(2026,11,1);
+  const vacStart = D(2026,10,1), vacEnd = D(2026,10,7);
+
+  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, {});
+  check('r5-1 zero-conflict vacation is never slid',
+    !r.isSlid && slide.sameDay(r.chosenSlideStart, vacStart) && slide.sameDay(r.chosenSlideEnd, vacEnd),
+    `isSlid=${r.isSlid}, slide ${fmt(r.chosenSlideStart)} -> ${fmt(r.chosenSlideEnd)}`);
+  check('r5-2 zero-conflict vacation gets no bonus vacWorkdays from the (skipped) search',
+    r.vacWorkdays === 0, `vacWorkdays = ${r.vacWorkdays}`);
+  check('r5-3 recommendedSlideStart/End stay null (no recommendation offered)',
+    r.recommendedSlideStart === null && r.recommendedSlideEnd === null,
+    `recommendedSlideStart=${fmt(r.recommendedSlideStart)}, recommendedSlideEnd=${fmt(r.recommendedSlideEnd)}`);
+
+  // Sanity: a vacation that DOES conflict (even by 1 day) still searches normally.
+  const vacStart2 = D(2026,10,2), vacEnd2 = D(2026,10,8); // 1 day (Oct 8) is a workday
+  const r2 = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart2, vacEnd2, {});
+  check('r5-4 sanity: a 1-day-conflicted vacation still runs the normal search (not falsely short-circuited)',
+    r2.vacWorkdays >= 1, `vacWorkdays = ${r2.vacWorkdays}`);
+})();
+
 // ─── Report ─────────────────────────────────────────────────────────────────
 console.log('\n══════════════════════════════════════════════════════════════');
 console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / ≤3 Award / R-1 model');
