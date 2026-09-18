@@ -707,6 +707,43 @@ function assertNull(name, actual) {
     `awardDays=${rNoDesired.awardDays}, locDaysOff=${rNoDesired.locDaysOff}`);
 })();
 
+// ─── Partial-conflict slide must not leapfrog onto an unrelated later trip ──
+// Reported by the domain owner 2026-09-18: line 4185 (Oct 2026 ORD 747 FO) has
+// a trip Oct 28-Nov 1 (5 days) touched by only its LAST day (Nov 1) by a
+// vacation awarded Nov 1-7 (7 days) — a 1-day partial conflict. A gap of
+// natural days off follows, then an UNRELATED trip Nov 11-15. Because the
+// touched trip (5 days) is SHORTER than the vacation (7 days), no slide
+// position can ever reach "full conflict" (7 workdays) against it alone, so
+// the old effectiveMinStart/effectiveMaxStart search never found its stop
+// condition searching rightward and fell through to the un-capped anchor
+// bound (vacEnd = Nov 7) — letting the vacation slide to Nov 7-13, landing on
+// the Nov 11-15 trip instead of resolving the trip it actually conflicts
+// with. The correct legal move is leftward, fully absorbing Oct 28-Nov 1 via
+// the leading LOC/AWRD block (matches the user-confirmed "alt slide" Oct
+// 31-Nov 6).
+(function testPartialConflictNoLeapfrog() {
+  const datesOff = [];
+  for (let d = 2; d <= 27; d++) datesOff.push(D(2026,10,d)); // Oct 2-27 off (except the touched trip's own days, harmless overlap)
+  for (let d = 2; d <= 10; d++) datesOff.push(D(2026,11,d));  // Nov 2-10 off (gap between the two trips)
+  const trips = [
+    trip(2026,10,28, 11,1),   // 5-day trip touched only at its last day by the vacation
+    trip(2026,11,11, 11,15),  // unrelated later trip — must not be reached
+  ];
+  const scheduleEnd = D(2026,12,1);
+  const vacStart = D(2026,11,1), vacEnd = D(2026,11,7);
+
+  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, {});
+  check('nlf1 chosen slide stays left of the Nov 11 trip (Oct 31-Nov 6), does not leapfrog to Nov 7-13',
+    slide.sameDay(r.chosenSlideStart, D(2026,10,31)) && slide.sameDay(r.chosenSlideEnd, D(2026,11,6)),
+    `slide ${fmt(r.chosenSlideStart)} -> ${fmt(r.chosenSlideEnd)}`);
+  check('nlf2 leading LOC/AWRD block fully absorbs the touched trip (Oct 28-30)',
+    r.locDaysOff === 3 && r.locRanges.length === 1 &&
+      slide.sameDay(r.locRanges[0].start, D(2026,10,28)) && slide.sameDay(r.locRanges[0].end, D(2026,10,30)),
+    `locDaysOff=${r.locDaysOff}, locRanges=${JSON.stringify(r.locRanges)}`);
+  check('nlf3 no award days credited from the unrelated Nov 11 trip',
+    r.awardDays === 0, `awardDays = ${r.awardDays}`);
+})();
+
 // ─── Report ─────────────────────────────────────────────────────────────────
 console.log('\n══════════════════════════════════════════════════════════════');
 console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / ≤3 Award / R-1 model');

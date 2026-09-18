@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.15.1';
+        const APP_VERSION   = '1.15.2';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3148,16 +3148,40 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             // 7.D.2.c cap: partial-conflicted slide may not go past first full-conflict position.
             // NB: we search both directions and cap independently — the CBA's directional wording
             // is subsumed by 7.D.2.d abut in practice.
+            //
+            // A second, harder stop: rule 2 lets the slide extend only far enough to cover
+            // the trip it's ACTUALLY conflicting with — not leapfrog onto a different, unrelated
+            // trip pairing further out just because the anchor rule's date math would allow it.
+            // That gap matters when the conflicting trip is SHORTER than the vacation itself
+            // (e.g. a 5-day trip touched by a 7-day vacation) — no position can ever reach full
+            // conflict there, so without this check the search fell through to the un-capped
+            // anchor bound and wandered onto whatever the next trip happened to be. Reported
+            // case: line 4185 (Oct 2026 ORD 747 FO), vacation Nov 1-7 touching only the trailing
+            // day (Nov 1) of the Oct 28-Nov 1 trip — old code let it slide to Nov 7-13, landing on
+            // the unrelated Nov 11-15 trip instead of resolving against the trip it conflicts with.
             let effectiveMinStart = minStart;
             let effectiveMaxStart = maxStart;
             if (isPartiallyConflicted) {
+                const origConflictTrips = trips.filter(t => !(vacEnd < t.start || vacStart > t.end));
+                const stillTouchesOrigTrip = (sStart, sEnd) =>
+                    origConflictTrips.some(t => !(sEnd < t.start || sStart > t.end));
+
+                effectiveMinStart = vacStart;
                 for (let d = addDays(vacStart, -1); d >= minStart; d = addDays(d, -1)) {
-                    const cand = evalVacPosition(d, addDays(d, vacLength - 1), trips, naturalOff);
-                    if (cand.vacWorkdays >= vacLength) { effectiveMinStart = d; break; }
+                    const dEnd = addDays(d, vacLength - 1);
+                    if (!stillTouchesOrigTrip(d, dEnd)) break;
+                    effectiveMinStart = d;
+                    const cand = evalVacPosition(d, dEnd, trips, naturalOff);
+                    if (cand.vacWorkdays >= vacLength) break;
                 }
+
+                effectiveMaxStart = vacStart;
                 for (let d = addDays(vacStart, 1); d <= maxStart; d = addDays(d, 1)) {
-                    const cand = evalVacPosition(d, addDays(d, vacLength - 1), trips, naturalOff);
-                    if (cand.vacWorkdays >= vacLength) { effectiveMaxStart = d; break; }
+                    const dEnd = addDays(d, vacLength - 1);
+                    if (!stillTouchesOrigTrip(d, dEnd)) break;
+                    effectiveMaxStart = d;
+                    const cand = evalVacPosition(d, dEnd, trips, naturalOff);
+                    if (cand.vacWorkdays >= vacLength) break;
                 }
             }
 
