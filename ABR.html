@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.14.4';
+        const APP_VERSION   = '1.15.0';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2222,7 +2222,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         // A column is "off" if it contains X or has no meaningful content.
                         // A column is "working" if it has any content other than X or underscores.
                         const colWorkingStatus = sortedDateCols.map(dc => {
-                            const colWds = blockWords.filter(w => Math.abs(w.x - dc.x) < colTolerance);
+                            const colWds = blockWords
+                                .filter(w => Math.abs(w.x - dc.x) < colTolerance)
+                                .sort((a, b) => b.y - a.y || a.x - b.x); // reading order (matches colWords below)
                             const hasX = colWds.some(w => w.text === 'X');
                             // Only count "real" trip content — 3-letter airports, flight numbers
                             // (4+ alphanumeric chars), times (contain :), or WORK.
@@ -2235,7 +2237,39 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                        /:\d{2}/.test(w.text) ||    // times: 1:59, 19:40…
                                        w.text === 'WORK';
                             });
-                            return { isOff: hasX || !hasContent };
+
+                            // 0700z rule: a column showing ONLY a landing (airport + time, no
+                            // flight number, no second time) before 0700 UTC with nothing printed
+                            // after it is the tail of the PREVIOUS day's flight spilling past
+                            // midnight — not a new workday. A flight number or a second time in
+                            // the column means a departure was scheduled FROM this date (real
+                            // duty that starts within its own 0700-0659 window, however early),
+                            // so those columns must NOT be caught by this rule — verified against
+                            // line 4141 Oct26 (Bidline Oct 2026 ORD 747 FO): Oct 5 (VN311, departs
+                            // 0:30, arrives 6:10) and Oct 27 (CI107 + other legs) are genuine
+                            // workdays despite an early last-printed time, while Nov 1 (bare "ORD
+                            // 1:20", nothing else) is a true landing-only tail of the flight that
+                            // departed CVG Oct 31 23:55.
+                            let isEarlyArrivalOnly = false;
+                            if (hasContent && !hasX) {
+                                const timeIdxs = [];
+                                for (let ti = 0; ti < colWds.length; ti++) {
+                                    if (/^\d{1,2}:\d{2}$/.test(colWds[ti].text)) timeIdxs.push(ti);
+                                }
+                                const hasFlightNumber = colWds.some(w => {
+                                    if (w.text.length === 0 || w.text === 'X' || /^_+$/.test(w.text)) return false;
+                                    return /^\w{4,}/.test(w.text) && !airportPattern.test(w.text);
+                                });
+                                if (timeIdxs.length === 1 && !hasFlightNumber) {
+                                    const lastTimeIdx = timeIdxs[0];
+                                    const nothingAfter = colWds.slice(lastTimeIdx + 1).every(w => /^_+$/.test(w.text));
+                                    if (nothingAfter && parseInt(colWds[lastTimeIdx].text.split(':')[0], 10) < 7) {
+                                        isEarlyArrivalOnly = true;
+                                    }
+                                }
+                            }
+
+                            return { isOff: hasX || !hasContent || isEarlyArrivalOnly, isEarlyArrivalOnly };
                         });
 
                         for (let colIdx = 0; colIdx < sortedDateCols.length; colIdx++) {
@@ -2254,27 +2288,13 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             // Early-arrival detection (0700z rule): Atlas treats any day whose
                             // trip duty ends before 0700 UTC as a Day Off — the printed X-markers
                             // aren't guaranteed to already reflect this (see CLAUDE.md "0700z" /
-                            // Fix A). All PDF times are UTC (header: "ALL Times in UTC"). A
-                            // workday column qualifies when its LAST printed time is a
-                            // sub-07:00 arrival with nothing else following it that day (no
-                            // further flight departs — only the row filler remains after it).
-                            if (!colWorkingStatus[colIdx].isOff) {
-                                let lastTimeIdx = -1;
-                                for (let ti = 0; ti < colWords.length; ti++) {
-                                    if (/^\d{1,2}:\d{2}$/.test(colWords[ti].text)) lastTimeIdx = ti;
-                                }
-                                if (lastTimeIdx !== -1) {
-                                    const nothingAfter = colWords.slice(lastTimeIdx + 1)
-                                        .every(w => /^_+$/.test(w.text));
-                                    if (nothingAfter) {
-                                        const arrivalHour = parseInt(colWords[lastTimeIdx].text.split(':')[0], 10);
-                                        if (arrivalHour < 7) {
-                                            const earlyDate = new Date(baseYear, monthMap[dc.month], dc.day);
-                                            if (!lines[lineNum].earlyArrivalDates.some(d => d.getTime() === earlyDate.getTime())) {
-                                                lines[lineNum].earlyArrivalDates.push(earlyDate);
-                                            }
-                                        }
-                                    }
+                            // Fix A). All PDF times are UTC (header: "ALL Times in UTC"). Already
+                            // computed once in colWorkingStatus (which now also treats the column
+                            // as off); recorded here too for the vacation-slide "last day" path.
+                            if (colWorkingStatus[colIdx].isEarlyArrivalOnly) {
+                                const earlyDate = new Date(baseYear, monthMap[dc.month], dc.day);
+                                if (!lines[lineNum].earlyArrivalDates.some(d => d.getTime() === earlyDate.getTime())) {
+                                    lines[lineNum].earlyArrivalDates.push(earlyDate);
                                 }
                             }
 
