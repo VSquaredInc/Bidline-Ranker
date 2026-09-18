@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bidline-ranker-v27';
+const CACHE_NAME = 'bidline-ranker-v28';
 
 const PRECACHE = [
   './ABR.html',

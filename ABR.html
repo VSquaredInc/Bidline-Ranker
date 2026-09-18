@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.14.3';
+        const APP_VERSION   = '1.14.4';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2865,7 +2865,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // Evaluate a specific vacation slide position — returns awardDays, vacWorkdays,
         // effectiveDaysOff and the award-day/LOC range(s) so downstream (filter, display) can use them.
-        function evalVacPosition(slideStart, slideEnd, trips, naturalOff) {
+        function evalVacPosition(slideStart, slideEnd, trips, naturalOff, desiredDates = []) {
             let vacWorkdays = 0;
             const isWork = (d) => trips.some(t => d >= t.start && d <= t.end);
 
@@ -2909,10 +2909,22 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const trailingQualifies = trailingRun >= 1 && trailingRun <= 3;
             let bigSide = null;
             if (leadingQualifies && trailingQualifies) {
-                // Both edges qualify — CBA form has the crew member choose; the search
-                // isn't given a per-request preference, so take the larger benefit
-                // (ties keep the prior trailing-edge default).
-                bigSide = leadingRun > trailingRun ? 'leading' : 'trailing';
+                // Both edges qualify — CBA form has the crew member choose. The unequal
+                // case takes the larger benefit. A genuine tie (equal run length) scores
+                // identically either way — same total effectiveDaysOff — so when the
+                // pilot has Dates Desired Off, break the tie toward whichever side
+                // actually covers one of those dates instead of defaulting blindly;
+                // with no such date (or both/neither side covers one), keep the prior
+                // trailing-edge default.
+                if (leadingRun === trailingRun && desiredDates.length > 0) {
+                    const leadStart = addDays(slideStart, -leadingRun), leadEnd = addDays(slideStart, -1);
+                    const trailStart = addDays(slideEnd, 1), trailEnd = addDays(slideEnd, trailingRun);
+                    const leadCovers  = desiredDates.some(d => d >= leadStart  && d <= leadEnd);
+                    const trailCovers = desiredDates.some(d => d >= trailStart && d <= trailEnd);
+                    bigSide = (leadCovers && !trailCovers) ? 'leading' : 'trailing';
+                } else {
+                    bigSide = leadingRun > trailingRun ? 'leading' : 'trailing';
+                }
             } else if (leadingQualifies) {
                 bigSide = 'leading';
             } else if (trailingQualifies) {
@@ -3055,6 +3067,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
             const isOff = (date) => isEffectiveOff(date, datesOff, scheduleEnd, userMarkedOff);
 
+            // Days Desired Off — read early so the AWRD leading/trailing tie-break
+            // inside evalVacPosition can favor whichever side covers one of these.
+            const desiredDates = opts.desiredDates || [];
+
             // Restricted weeks the original awarded vacation already falls in — sliding OUT is OK
             const origRestrictedWeeks = restrictedWeeksIn(vacStart, vacEnd);
 
@@ -3065,7 +3081,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
             // Partial-conflict classification (7.D.2.c/d vs 7.D.4).
             // A day inside the vacation is "on work" if it's a trip day AND not user-flagged as off.
-            const origEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
+            const origEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff, desiredDates);
             // For classification: subtract any user-marked-off days that fall inside vacation
             // (they LOOK like workdays to evalVacPosition but the pilot has asserted they're off).
             let effectiveVacWorkdays = origEval.vacWorkdays;
@@ -3134,7 +3150,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 const candRestricted = restrictedWeeksIn(sStart, sEnd);
                 if ([...candRestricted].some(w => !origRestrictedWeeks.has(w))) continue;
 
-                const r = evalVacPosition(sStart, sEnd, trips, naturalOff);
+                const r = evalVacPosition(sStart, sEnd, trips, naturalOff, desiredDates);
 
                 // 7.D.2.d abut rule: evaluated per candidate, not just from the original award.
                 // A candidate that is ITSELF partially conflicted (mixes real workdays with
@@ -3164,7 +3180,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             };
 
             // Guaranteed baseline: original position (may fail 7.D.5 nothing — sanity fallback only)
-            const originEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff);
+            const originEval = evalVacPosition(vacStart, vacEnd, trips, naturalOff, desiredDates);
             if (positions.length === 0) {
                 positions.push({
                     sStart: new Date(vacStart), sEnd: new Date(vacEnd),
@@ -3183,7 +3199,6 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             // the higher-scoring slide the unconstrained search would otherwise pick,
             // so the line stays in results (ranked on its actual score) instead of
             // being dropped just because the best-scoring slide lands elsewhere.
-            const desiredDates = opts.desiredDates || [];
             const coversDesired = (pos) => desiredDates.length > 0 && desiredDates.every(d => {
                 if (d >= pos.sStart && d <= pos.sEnd) return true;
                 if (pos.r.locRanges && pos.r.locRanges.some(rg => d >= rg.start && d <= rg.end)) return true;

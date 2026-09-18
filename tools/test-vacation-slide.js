@@ -667,6 +667,46 @@ function assertNull(name, actual) {
     r2.vacWorkdays >= 1, `vacWorkdays = ${r2.vacWorkdays}`);
 })();
 
+// ─── AWRD election tie-break should favor Dates Desired Off ─────────────────
+// Reported by the domain owner 2026-09-17: trip Oct 13-25, vacation awarded
+// Oct 18-24 (fully inside the trip, so 7.D.4 lets it slide freely), desired
+// dates Oct 11-13. The unconstrained optimum slides to Oct 16-22, where the
+// leading run (Oct 13-15) and trailing run (Oct 23-25) are BOTH exactly 3 —
+// a genuine tie for the single 7.D.7 AWRD election. Before this fix,
+// evalVacPosition always broke such ties toward the trailing side regardless
+// of context, which happened to leave Oct 13 an actual workday even though
+// electing the leading side scores identically (both total 11 bonus days —
+// verified by hand: leadingRun+1 == trailingRun+1 when the runs are equal)
+// and covers the desired date. The tie-break now checks desiredDates first.
+(function testAwrdTieBreakFavorsDesiredDates() {
+  const datesOff = [];
+  for (let d = 1; d <= 12; d++) datesOff.push(D(2026,10,d));
+  for (let d = 26; d <= 31; d++) datesOff.push(D(2026,10,d));
+  const trips = [ trip(2026,10,13, 10,25) ];
+  const scheduleEnd = D(2026,11,1);
+  const vacStart = D(2026,10,18), vacEnd = D(2026,10,24);
+  const desired = [D(2026,10,11), D(2026,10,12), D(2026,10,13)];
+
+  const r = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, { desiredDates: desired });
+  check('awrd1 chosen slide is Oct 16-22 (the unconstrained optimum, now reachable)',
+    slide.sameDay(r.chosenSlideStart, D(2026,10,16)) && slide.sameDay(r.chosenSlideEnd, D(2026,10,22)),
+    `slide ${fmt(r.chosenSlideStart)} -> ${fmt(r.chosenSlideEnd)}`);
+  check('awrd2 tie resolves to the LEADING edge (covers Oct 13), not trailing',
+    r.locRanges.length === 1 && slide.sameDay(r.locRanges[0].start, D(2026,10,13)) && slide.sameDay(r.locRanges[0].end, D(2026,10,15)),
+    `locRanges = ${JSON.stringify(r.locRanges)}`);
+  check('awrd3 trailing edge falls back to the mandatory single R-1 day (Oct 23)',
+    r.r1DaysOff === 1 && r.r1Ranges.length === 1 && slide.sameDay(r.r1Ranges[0].start, D(2026,10,23)),
+    `r1DaysOff=${r.r1DaysOff}, r1Ranges=${JSON.stringify(r.r1Ranges)}`);
+  check('awrd4 effectiveDaysOff = 29 (18 natural off Oct 1-12/26-31 + 7 vacation workdays + 3 leading AWRD + 1 R-1)',
+    r.effectiveDaysOff === 29, `effectiveDaysOff = ${r.effectiveDaysOff}`);
+
+  // Sanity: without Dates Desired Off, the tie still defaults to trailing (unchanged prior behavior).
+  const rNoDesired = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, {});
+  check('awrd5 sanity: with no desiredDates, an equal tie still defaults to trailing as before',
+    rNoDesired.awardDays === 3 && rNoDesired.locDaysOff === 1,
+    `awardDays=${rNoDesired.awardDays}, locDaysOff=${rNoDesired.locDaysOff}`);
+})();
+
 // ─── Report ─────────────────────────────────────────────────────────────────
 console.log('\n══════════════════════════════════════════════════════════════');
 console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / ≤3 Award / R-1 model');
