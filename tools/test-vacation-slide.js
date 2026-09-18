@@ -744,6 +744,46 @@ function assertNull(name, actual) {
     r.awardDays === 0, `awardDays = ${r.awardDays}`);
 })();
 
+// ─── The window itself must not reach a DIFFERENT trip, even mid-range ──────
+// Follow-up from the domain owner on the nlf fix above: capping the STARTING
+// position isn't enough on its own — a window that starts within the capped
+// range can still have its far END land on an unrelated trip. Case: a trip
+// ends Nov 2 (touching only the vacation's first day), a completely separate
+// trip starts Nov 8 (the day immediately after the vacation ends). Sliding
+// the start to Nov 2 keeps sStart within the (correctly capped) range from
+// the nlf fix, but the window Nov 2-8 reaches all the way to the unrelated
+// trip's first day — vacWorkdays and the leading LOC/AWRD block would credit
+// a trip this vacation never conflicted with. Fixed by rejecting any partial-
+// conflict candidate whose window overlaps a trip outside origConflictTrips,
+// independent of the starting-position cap.
+(function testWindowMustNotReachUnrelatedTrip() {
+  const datesOff = [];
+  for (let d = 1; d <= 25; d++) datesOff.push(D(2026,10,d));
+  for (let d = 3; d <= 7; d++)  datesOff.push(D(2026,11,d));   // gap between the two trips
+  for (let d = 9; d <= 20; d++) datesOff.push(D(2026,11,d));   // off after the unrelated trip
+  const trips = [
+    trip(2026,10,31, 11,2),  // touches only Nov 1-2 of the vacation
+    trip(2026,11,8, 11,8),   // unrelated single-day trip starting right after the vacation ends
+  ];
+  const scheduleEnd = D(2026,12,1);
+  const vacStart = D(2026,11,1), vacEnd = D(2026,11,7);
+
+  const unconstrained = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, {});
+  check('wr1 unconstrained optimum does not slide onto the window Nov2-8 (stays at the awarded position)',
+    !unconstrained.isSlid && slide.sameDay(unconstrained.chosenSlideStart, vacStart),
+    `isSlid=${unconstrained.isSlid}, slide ${fmt(unconstrained.chosenSlideStart)} -> ${fmt(unconstrained.chosenSlideEnd)}`);
+  check('wr2 unconstrained vacWorkdays draws only from the touched trip (2, not 3 with the unrelated day)',
+    unconstrained.vacWorkdays === 2, `vacWorkdays = ${unconstrained.vacWorkdays}`);
+
+  // Even when the pilot explicitly wants Nov 8 off, it must NOT be reachable by
+  // sliding this vacation onto the unrelated trip -- falls back to unconstrained.
+  const steered = slide.computeVacationScore(trips, datesOff, scheduleEnd, vacStart, vacEnd, { desiredDates: [D(2026,11,8)] });
+  check('wr3 Nov 8 (the unrelated trip) is not reachable even when explicitly desired -- falls back cleanly',
+    slide.sameDay(steered.chosenSlideStart, unconstrained.chosenSlideStart) &&
+      slide.sameDay(steered.chosenSlideEnd, unconstrained.chosenSlideEnd),
+    `steered slide ${fmt(steered.chosenSlideStart)} -> ${fmt(steered.chosenSlideEnd)}`);
+})();
+
 // ─── Report ─────────────────────────────────────────────────────────────────
 console.log('\n══════════════════════════════════════════════════════════════');
 console.log(' VACATION SLIDE REGRESSION TEST — 1-day LOC / ≤3 Award / R-1 model');

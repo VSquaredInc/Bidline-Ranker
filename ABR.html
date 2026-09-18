@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.15.2';
+        const APP_VERSION   = '1.15.3';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -3161,8 +3161,11 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             // the unrelated Nov 11-15 trip instead of resolving against the trip it conflicts with.
             let effectiveMinStart = minStart;
             let effectiveMaxStart = maxStart;
+            // Trip(s) the ORIGINAL award actually conflicts with — used both to cap the
+            // start-position search above and, in the main loop below, to reject any
+            // candidate whose window reaches a DIFFERENT, unrelated trip.
+            const origConflictTrips = trips.filter(t => !(vacEnd < t.start || vacStart > t.end));
             if (isPartiallyConflicted) {
-                const origConflictTrips = trips.filter(t => !(vacEnd < t.start || vacStart > t.end));
                 const stillTouchesOrigTrip = (sStart, sEnd) =>
                     origConflictTrips.some(t => !(sEnd < t.start || sStart > t.end));
 
@@ -3199,6 +3202,22 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 // 7.D.5: cannot slide INTO a restricted week the original wasn't already in
                 const candRestricted = restrictedWeeksIn(sStart, sEnd);
                 if ([...candRestricted].some(w => !origRestrictedWeeks.has(w))) continue;
+
+                // Rule 2: a partial-conflict slide may only cover the trip it's ACTUALLY
+                // conflicting with — the window itself must not reach into a DIFFERENT,
+                // unrelated trip pairing just because it happens to fall within the anchor-
+                // bounded starting-position range. (The starting-position cap above stops
+                // sStart from wandering too far, but a window that still starts within range
+                // can have its far END land on a separate trip — e.g. vacation Nov 1-7 touching
+                // only the tail of a trip ending Nov 2, slid to Nov 2-8, reaching a completely
+                // unrelated trip starting Nov 8. That's still rejected here.) Untouched for
+                // fully-conflicted vacations (7.D.4 slides freely) — isPartiallyConflicted
+                // gates this to the partial-conflict case only.
+                if (isPartiallyConflicted) {
+                    const touchesUnrelatedTrip = trips.some(t =>
+                        !origConflictTrips.includes(t) && !(sEnd < t.start || sStart > t.end));
+                    if (touchesUnrelatedTrip) continue;
+                }
 
                 const r = evalVacPosition(sStart, sEnd, trips, naturalOff, desiredDates);
 
