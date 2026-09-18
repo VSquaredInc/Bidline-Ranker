@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.15.0';
+        const APP_VERSION   = '1.15.1';
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -2239,28 +2239,34 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             });
 
                             // 0700z rule: a column showing ONLY a landing (airport + time, no
-                            // flight number, no second time) before 0700 UTC with nothing printed
-                            // after it is the tail of the PREVIOUS day's flight spilling past
-                            // midnight — not a new workday. A flight number or a second time in
-                            // the column means a departure was scheduled FROM this date (real
-                            // duty that starts within its own 0700-0659 window, however early),
-                            // so those columns must NOT be caught by this rule — verified against
-                            // line 4141 Oct26 (Bidline Oct 2026 ORD 747 FO): Oct 5 (VN311, departs
-                            // 0:30, arrives 6:10) and Oct 27 (CI107 + other legs) are genuine
-                            // workdays despite an early last-printed time, while Nov 1 (bare "ORD
-                            // 1:20", nothing else) is a true landing-only tail of the flight that
-                            // departed CVG Oct 31 23:55.
+                            // flight/aircraft designator, no second time) before 0700 UTC with
+                            // nothing printed after it is the tail of the PREVIOUS day's flight
+                            // spilling past midnight — not a new workday. Any digit-bearing token
+                            // that isn't a time or a pure 3-letter airport code (flight number,
+                            // aircraft type, etc.) means a departure was scheduled FROM this date
+                            // — real duty starting within its own 0700-0659 window, however early
+                            // — so those columns must NOT be caught by this rule. Matched on
+                            // digits present, not a minimum length: verified against real data
+                            // (line 4141 Oct 2026 ORD 747 FO) that flight numbers can be as short
+                            // as 3 characters (line 4204's "588", Nov 6) — a plain length-4+ regex
+                            // missed that case and would have wrongly zeroed out a real workday.
+                            // Oct 5 (VN311, departs 0:30, arrives 6:10) and Oct 27 (CI107 + other
+                            // legs) are genuine workdays despite an early last-printed time, while
+                            // Nov 1 (bare "ORD 1:20", nothing else) is a true landing-only tail of
+                            // the flight that departed CVG Oct 31 23:55.
                             let isEarlyArrivalOnly = false;
                             if (hasContent && !hasX) {
                                 const timeIdxs = [];
                                 for (let ti = 0; ti < colWds.length; ti++) {
                                     if (/^\d{1,2}:\d{2}$/.test(colWds[ti].text)) timeIdxs.push(ti);
                                 }
-                                const hasFlightNumber = colWds.some(w => {
-                                    if (w.text.length === 0 || w.text === 'X' || /^_+$/.test(w.text)) return false;
-                                    return /^\w{4,}/.test(w.text) && !airportPattern.test(w.text);
+                                const hasFlightOrAircraftCode = colWds.some(w => {
+                                    if (w.text.length === 0 || w.text === 'X' || w.text === '*' || /^_+$/.test(w.text)) return false;
+                                    if (/^\d{1,2}:\d{2}$/.test(w.text)) return false; // already counted as a time
+                                    if (airportPattern.test(w.text)) return false;    // pure 3-letter airport code
+                                    return /\d/.test(w.text);
                                 });
-                                if (timeIdxs.length === 1 && !hasFlightNumber) {
+                                if (timeIdxs.length === 1 && !hasFlightOrAircraftCode) {
                                     const lastTimeIdx = timeIdxs[0];
                                     const nothingAfter = colWds.slice(lastTimeIdx + 1).every(w => /^_+$/.test(w.text));
                                     if (nothingAfter && parseInt(colWds[lastTimeIdx].text.split(':')[0], 10) < 7) {
