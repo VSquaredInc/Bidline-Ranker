@@ -92,5 +92,51 @@
     "primaryUnreadCount": 0,
     "primaryUnreadPct": 0,
     "primaryAtFloorPct": 21
+  },
+  {
+    "savedAt": "2026-10-15T05:49:21.566Z",
+    "appVersion": "1.15.3",
+    "base": "LAX",
+    "aircraft": "744",
+    "position": "CA",
+    "period": "2026-11",
+    "bidlineLineCount": 34,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 13,
+      "Primary 60-day Int": 8,
+      "Secondary AdH": 3,
+      "Secondary 60-day": 5,
+      "Reserve AdH": 2,
+      "Reserve 60-day AdH": 3
+    },
+    "daysOffRange": [
+      13,
+      18
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "legacy",
+    "creditFiles": [
+      {
+        "name": "747 Lines Nov26-Dec26 Period.pdf",
+        "lineCount": 365,
+        "guaranteeNonZero": 365
+      },
+      {
+        "name": "747 Lines Nov26-Nov26 Period.pdf",
+        "lineCount": 907,
+        "guaranteeNonZero": 907
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      84.86
+    ],
+    "primaryCount": 21,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 5
   }
 ]
