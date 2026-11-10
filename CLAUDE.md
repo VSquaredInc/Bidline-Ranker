@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.12.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v21` (in service-worker.js)  
+**Current version:** 1.16.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v33` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -47,6 +47,7 @@ All app logic lives in a single file: **`ABR.html`** — no build step, no frame
 | `service-worker.js` | PWA cache-first offline support |
 | `manifest.json` | PWA manifest (name, icons, theme) |
 | `pdf.min.js` / `pdf.worker.min.js` | PDF.js v3.11.174 bundled locally (not CDN) |
+| `ios-app/` | **Native iPad app** (Capacitor 8, SPM, iPad-only, bundle `com.visionvector.bidlineranker`). Wraps ABR.html — no separate logic. `.github/workflows/ios-build.yml` builds an unsigned `.ipa` on a GitHub Mac runner on every push touching ABR.html; sideload via Sideloadly + free Apple ID (7-day expiry). Native-only paths in ABR.html are gated on `IS_NATIVE_APP`. TestFlight needs the paid Apple Developer account (not yet enrolled). See `ios-app/README.md` |
 | `tools/` | Maintenance tooling (not shipped). `bid-file-doctor.js` — see below |
 | `backups/` | Timestamped HTML backups — never commit these to git |
 
