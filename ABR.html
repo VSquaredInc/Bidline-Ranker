@@ -1543,7 +1543,9 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.15.3';
+        const APP_VERSION   = '1.16.0';
+        // True inside the native iPad app (Capacitor wrapper in ios-app/); false in any browser/PWA.
+        const IS_NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
         function _uuid() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
@@ -1561,7 +1563,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // Per-session ID (resets each time the app is opened)
         const _sessionId = _uuid();
-        const _device = /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop';
+        const _device = IS_NATIVE_APP ? 'ios-app' : (/Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop');
 
         function track(event, props = {}) {
             if (ANALYTICS_URL.includes('REPLACE_WITH')) return; // not yet configured
@@ -4311,11 +4313,24 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                 ...rows.map(r => r.join(','))
             ].join('\n');
             
+            const csvName = `bidline_rankings_${new Date().toISOString().slice(0,10)}.csv`;
+            if (IS_NATIVE_APP) {
+                // WKWebView ignores <a download>; write the file and open the iOS share sheet instead.
+                const { Filesystem, Share } = window.Capacitor.Plugins;
+                Filesystem.writeFile({ path: csvName, data: csv, directory: 'CACHE', encoding: 'utf8' })
+                    .then(res => Share.share({ title: 'Bidline rankings', url: res.uri }))
+                    .then(() => showStatus('CSV exported successfully!', 'success'))
+                    .catch(err => {
+                        if (/cancel/i.test(String(err && err.message))) return;
+                        showStatus('CSV export failed: ' + (err && err.message || err), 'error');
+                    });
+                return;
+            }
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `bidline_rankings_${new Date().toISOString().slice(0,10)}.csv`;
+            a.download = csvName;
             a.click();
             URL.revokeObjectURL(url);
             
@@ -4409,7 +4424,10 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
     <!-- PWA: register service worker -->
     <script>
-        if ('serviceWorker' in navigator) {
+        // Not in the native app: its files ship inside the bundle, and WKWebView
+        // doesn't support service workers on the capacitor:// scheme anyway.
+        const _isNative = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+        if ('serviceWorker' in navigator && !_isNative) {
             navigator.serviceWorker.register('./service-worker.js')
                 .catch(err => console.warn('Service worker registration failed:', err));
         }

@@ -1,0 +1,65 @@
+name: iPad app build
+
+# Builds the Capacitor wrapper in ios-app/ on a GitHub-hosted Mac and uploads an
+# UNSIGNED .ipa as a workflow artifact. Sideload it onto your own iPad with
+# Sideloadly (Windows) + a free Apple ID; see ios-app/README.md.
+# Signed TestFlight builds need a paid Apple Developer account (not wired up yet).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'ABR.html'
+      - 'pdf.min.js'
+      - 'pdf.worker.min.js'
+      - 'ios-app/**'
+      - '.github/workflows/ios-build.yml'
+
+jobs:
+  build:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ios-app/package-lock.json
+
+      - name: Install Capacitor
+        run: npm ci
+
+      - name: Copy ABR.html into the app bundle
+        run: npm run sync
+
+      - name: Build (unsigned)
+        run: |
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tail -40
+          test -d build/Build/Products/Release-iphoneos/App.app
+
+      - name: Package .ipa
+        run: |
+          VERSION=$(grep -o "APP_VERSION *= *'[^']*'" ../ABR.html | grep -o "[0-9][0-9.]*")
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/App.app Payload/
+          zip -qry "BidlineRanker-${VERSION}-unsigned.ipa" Payload
+          echo "IPA_NAME=BidlineRanker-${VERSION}-unsigned" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IPA_NAME }}
+          path: ios-app/${{ env.IPA_NAME }}.ipa
+          retention-days: 30

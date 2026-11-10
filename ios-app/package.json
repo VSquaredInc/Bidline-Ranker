@@ -1,0 +1,19 @@
+{
+  "name": "bidline-ranker-ios",
+  "version": "1.16.0",
+  "private": true,
+  "description": "Native iPad wrapper (Capacitor) around ../ABR.html",
+  "scripts": {
+    "sync-web": "node scripts/sync-web.js",
+    "sync": "node scripts/sync-web.js && npx cap sync ios"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.0"
+  }
+}

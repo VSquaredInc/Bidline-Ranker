@@ -1,0 +1,11 @@
+{
+  "appId": "com.visionvector.bidlineranker",
+  "appName": "Bidline Ranker",
+  "webDir": "www",
+  "backgroundColor": "#091d60",
+  "ios": {
+    "contentInset": "always",
+    "backgroundColor": "#091d60",
+    "limitsNavigationsToAppBoundDomains": false
+  }
+}
