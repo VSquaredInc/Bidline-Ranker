@@ -137,5 +137,49 @@
     "primaryUnreadCount": 0,
     "primaryUnreadPct": 0,
     "primaryAtFloorPct": 0
+  },
+  {
+    "savedAt": "2026-11-15T19:21:39.897Z",
+    "appVersion": "1.16.0",
+    "base": "ANC",
+    "aircraft": "77F",
+    "position": "FO",
+    "period": "2026-12",
+    "bidlineLineCount": 21,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 14,
+      "Primary 60-day Int": 5,
+      "Secondary AdH": 1,
+      "Secondary 60-day": 1
+    },
+    "daysOffRange": [
+      14,
+      19
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "legacy",
+    "creditFiles": [
+      {
+        "name": "777 Lines Dec26-Dec26 Period.pdf",
+        "lineCount": 191,
+        "guaranteeNonZero": 191
+      },
+      {
+        "name": "777 Lines Dec26-Jan27 Period.pdf",
+        "lineCount": 74,
+        "guaranteeNonZero": 74
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      83.65
+    ],
+    "primaryCount": 19,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 11
   }
 ]

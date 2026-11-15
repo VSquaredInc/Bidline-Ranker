@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.16.0 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v33` (in service-worker.js)  
+**Current version:** 1.16.1 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v34` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -81,7 +81,7 @@ The rules below described the retired per-user fetch. The bidline/credit filenam
 
 **Folder finding:** Lists all folders in the BidPackage library, filters by folders containing both the base code (e.g., `ORD`) and aircraft type (e.g., `747`), then picks the one with the most recent date parsed from the folder name format `DD-MON YYYY` (e.g., `15-MAY 2026 ORD 747`). Fully dynamic — no hardcoded months. **Fallback:** if no date can be parsed from any folder name (e.g., Atlas Air renames folders), falls back to the alphabetically last matching folder.
 
-**Bidline file match:** `n.includes('BIDLINE')` AND regex `[\s\-]+\s*{pos}(\s|\.|$)` — accepts both singular (`BIDLINE`, Jul 2026 onward) and plural (`BIDLINES`, pre-Jul 2026) forms, with any separator before the crew position (`747- FO`, `747 FO`, `747-FO`, etc.). Atlas switched to the singular filename starting with the Jul 2026 posting. Primary detection also checks for `CREW SCHEDULE FROM` in the PDF text (case-insensitive date-column regex added in v1.5.5 for all-caps PDF formats).
+**Bidline file match:** `/BID\s*LINE/` (was `n.includes('BIDLINE')` until Dec 2026, when Atlas switched to **"Bid lines"** with a space — e.g. `December 2026 Bid lines LAX 747 CA.pdf`, `December 2026 - Bid lines ANC 747 FO.pdf`, `December 2026 Bid lines  ORD 747 CA.pdf` (double space)) AND regex `[\s\-]+\s*{pos}(\s|\.|$)` — accepts both singular (`BIDLINE`, Jul 2026 onward) and plural (`BIDLINES`, pre-Jul 2026) forms, with any separator before the crew position (`747- FO`, `747 FO`, `747-FO`, etc.). Atlas switched to the singular filename starting with the Jul 2026 posting. Primary detection also checks for `CREW SCHEDULE FROM` in the PDF text (case-insensitive date-column regex added in v1.5.5 for all-caps PDF formats).
 
 **Credit file match:** `n.includes('LINES') && n.includes('PERIOD')`, excluding `VTO` and `PRIMARY`.
 
@@ -108,8 +108,9 @@ The legacy `parseCreditValue()` (flat-text) is retained only as the fallback for
 
 ---
 
-## Line Types (8 total, confirmed across all PDFs)
+## Line Types (9 total, confirmed across all PDFs)
 
+0. **Primary Dom** (domestic) — **new Dec 2026** (13 lines on 747 ANC/ORD, also JFK 767). Before v1.16.1 the bidline parser truncated it to "Primary" and the legacy credit parser returned `Unknown`, so the line-type filter (`startsWith('Primary'…)`) silently **dropped these lines from rankings**. Recognised in all three type paths since v1.16.1; a hypothetical "Primary 60-day Dom" ("…60-day Do" truncated) is mapped too. Bidline match is case-sensitive `\bDom\b` so the airport code `DOM` can't trigger it.
 1. Primary Int
 2. Primary AdH
 3. Primary 60-day Int ← PDF shows "Primary 60-day In" (truncated)

@@ -138,5 +138,47 @@
     "primaryUnreadCount": 0,
     "primaryUnreadPct": 0,
     "primaryAtFloorPct": 46
+  },
+  {
+    "savedAt": "2026-11-15T19:26:21.345Z",
+    "appVersion": "1.16.0",
+    "base": "ORD",
+    "aircraft": "77F",
+    "position": "CA",
+    "period": "2026-12",
+    "bidlineLineCount": 13,
+    "headerDateOk": true,
+    "lineTypeHistogram": {
+      "Primary Int": 6,
+      "Primary 60-day Int": 7
+    },
+    "daysOffRange": [
+      14,
+      19
+    ],
+    "filenameBidlineOk": true,
+    "creditFormat": "legacy",
+    "creditFiles": [
+      {
+        "name": "777 Lines Dec26-Dec26 Period.pdf",
+        "lineCount": 191,
+        "guaranteeNonZero": 191
+      },
+      {
+        "name": "777 Lines Dec26-Jan27 Period.pdf",
+        "lineCount": 74,
+        "guaranteeNonZero": 74
+      }
+    ],
+    "creditLandmarkOk": true,
+    "filenameCreditOk": true,
+    "guaranteeRange": [
+      64,
+      83.15
+    ],
+    "primaryCount": 13,
+    "primaryUnreadCount": 0,
+    "primaryUnreadPct": 0,
+    "primaryAtFloorPct": 23
   }
 ]

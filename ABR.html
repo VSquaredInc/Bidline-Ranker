@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.16.0';
+        const APP_VERSION   = '1.16.1';
         // True inside the native iPad app (Capacitor wrapper in ios-app/); false in any browser/PWA.
         const IS_NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
@@ -2082,6 +2082,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                     // PDF truncates "Int"→"In" and "AdH"→"Ad" on 60-day lines
                                     if (nearText.match(/\bInt\b/i) || nearText.match(/60-day\s+In\b/i)) lineType += ' Int';
                                     else if (nearText.match(/\bAdH\b/i) || nearText.match(/60-day\s+Ad\b/i)) lineType += ' AdH';
+                                    // "Primary Dom" (domestic) — new Dec 2026. Case-sensitive so the airport code DOM can't match.
+                                    else if (nearText.match(/\bDom\b/) || nearText.match(/60-day\s+Do\b/)) lineType += ' Dom';
                                 }
                             }
 
@@ -2509,7 +2511,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         }
                     }
 
-                    const typeRegex = /(?:Primary|Secondary|Reserve)(?:\s+60-day)?(?:\s+(?:Int|AdH))?/g;
+                    const typeRegex = /(?:Primary|Secondary|Reserve)(?:\s+60-day)?(?:\s+(?:Int|AdH|Dom))?/g;
                     const lineTypeArr = lineTypeStr ? (lineTypeStr.match(typeRegex) || []) : [];
 
                     lineNums.forEach((lineNum, idx) => {
@@ -2536,6 +2538,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         else if (/Primary 60-day\s*$/.test(line.trimEnd())) lineType = 'Primary 60-day Int';
                         else if (line.includes('Primary Int') || line.includes('Primary In ') || line.includes('Primary In\t')) lineType = 'Primary Int';
                         else if (line.includes('Primary AdH') || line.includes('Primary Ad ') || line.includes('Primary Ad\t')) lineType = 'Primary AdH';
+                        else if (line.includes('Primary 60-day Dom') || line.includes('Primary 60-day Do ')) lineType = 'Primary 60-day Dom';
+                        else if (line.includes('Primary Dom')) lineType = 'Primary Dom';
                         else if (line.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
                         else if (line.includes('Secondary AdH') || line.includes('Secondary Ad ') || line.includes('Secondary Ad\t')) lineType = 'Secondary AdH';
                         else if (line.includes('Reserve 60-day AdH') || line.includes('Reserve 60-day Ad ') || line.includes('Reserve 60-day Ad\t')) lineType = 'Reserve 60-day AdH';
@@ -2557,6 +2561,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         else if (/^Primary 60-day\s*$/.test(lineTypeRaw.trim())) lineType = 'Primary 60-day Int';
                         else if (lineTypeRaw.includes('Primary Int') || lineTypeRaw.includes('Primary In')) lineType = 'Primary Int';
                         else if (lineTypeRaw.includes('Primary AdH') || lineTypeRaw.includes('Primary Ad')) lineType = 'Primary AdH';
+                        else if (lineTypeRaw.includes('Primary 60-day Do')) lineType = 'Primary 60-day Dom';
+                        else if (lineTypeRaw.includes('Primary Dom')) lineType = 'Primary Dom';
                         else if (lineTypeRaw.includes('Secondary 60-day')) lineType = 'Secondary 60-day';
                         else if (lineTypeRaw.includes('Secondary AdH') || lineTypeRaw.includes('Secondary Ad')) lineType = 'Secondary AdH';
                         else if (lineTypeRaw.includes('Reserve 60-day AdH') || lineTypeRaw.includes('Reserve 60-day Ad')) lineType = 'Reserve 60-day AdH';

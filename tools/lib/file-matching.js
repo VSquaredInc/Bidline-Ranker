@@ -19,7 +19,8 @@ function classifyFiles(filenames, crewPosition) {
     const n = name.toUpperCase();
 
     const bidlinePositionMatch = new RegExp(`[\\s\\-]+\\s*${pos}(\\s|\\.|$)`).test(n);
-    if (n.includes('BIDLINE') && bidlinePositionMatch) {
+    // "BIDLINES" (pre-Jul 2026), "BIDLINE" (Jul 2026+), "BID LINES" (Dec 2026+)
+    if (/BID\s*LINE/.test(n) && bidlinePositionMatch) {
       matched.push({ name, role: 'bidline' });
       continue;
     }

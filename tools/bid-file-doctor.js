@@ -48,6 +48,7 @@ const fingerprint = require('./lib/fingerprint');
 // Line types the app knows how to score (see CLAUDE.md "Line Types").
 const KNOWN_TYPES = new Set([
   'Primary Int', 'Primary AdH', 'Primary 60-day Int', 'Primary 60-day AdH',
+  'Primary Dom', 'Primary 60-day Dom',  // Dom = domestic, new Dec 2026
   'Secondary AdH', 'Secondary 60-day', 'Secondary 60-day AdH',
   'Reserve AdH', 'Reserve 60-day AdH',
 ]);
@@ -75,7 +76,7 @@ function aircraftFamily(code) {
 
 function bidlineFilenameOk(name, pos) {
   const U = name.toUpperCase();
-  if (!U.includes('BIDLINE')) return false;
+  if (!/BID\s*LINE/.test(U)) return false;  // BIDLINES / BIDLINE / BID LINES (Dec 2026)
   return new RegExp(`[\\s\\-]+\\s*${pos}(\\s|\\.|$)`).test(U);
 }
 function creditFilenameOk(name) {
@@ -180,7 +181,7 @@ async function analyzeSchedule(bidlineDoc, creditDocs, parsers, appVersion) {
     fp.filenameBidlineOk = bidlineFilenameOk(bidlineDoc.name, fp.position);
     if (fp.filenameBidlineOk) ok('Portal', `Bidline filename matches portal pattern for ${fp.position}`);
     else err('Portal', `Bidline filename "${bidlineDoc.name}" would NOT be found by the portal fetch`,
-      'api/fetch-bid.js requires the name to contain BIDLINE and a separator before the position. Update that matcher (and CLAUDE.md). Redeploy Vercel.');
+      'tools/lib/file-matching.js requires the name to contain BIDLINE / BID LINE and a separator before the position. Update that matcher (and CLAUDE.md).');
   }
 
   // credit
