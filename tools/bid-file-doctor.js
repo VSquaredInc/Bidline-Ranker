@@ -176,6 +176,21 @@ async function analyzeSchedule(bidlineDoc, creditDocs, parsers, appVersion) {
   }
   if (zeroTrips) warn('Bidline', `${zeroTrips} line(s) parsed with 0 trips`, 'Trip (working-block) detection may have failed for these lines.');
 
+  // Every parsed date must sit inside the bid period (start − 7 days … start + 3 months).
+  // Catches the year-rollover class of bug (pre-1.16.2: January dates in a Dec–Jan bid
+  // were stamped with the previous year, silently breaking optimizer/date filters).
+  if (bps && count > 0) {
+    const lo = new Date(bps.getTime() - 7 * 864e5), hi = new Date(bps.getFullYear(), bps.getMonth() + 3, 1);
+    let bad = 0, sample = null;
+    for (const L of Object.values(bidlineLines)) {
+      const ds = [...L.datesOff, ...L.earlyArrivalDates, ...L.trips.flatMap(t => [t.start, t.end])];
+      for (const d of ds) if (d < lo || d >= hi) { bad++; if (!sample) sample = `${L.lineNum}: ${d.toDateString()}`; }
+    }
+    if (bad) err('Bidline', `${bad} parsed date(s) fall outside the bid period (e.g. ${sample})`,
+      'Date-column year resolution is wrong — see colDate() in parseBidlineWithPositions() and CLAUDE.md "Bid Cycle Rules".');
+    else ok('Bidline', 'All parsed dates fall inside the bid period');
+  }
+
   // bidline filename vs portal
   if (fp.position) {
     fp.filenameBidlineOk = bidlineFilenameOk(bidlineDoc.name, fp.position);

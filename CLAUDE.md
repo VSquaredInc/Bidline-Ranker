@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.16.1 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v34` (in service-worker.js)  
+**Current version:** 1.16.2 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v35` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -94,7 +94,8 @@ The rules below described the retired per-user fetch. The bidline/credit filenam
 - **`bidPeriodStart`** — global, set from the first page's `CREW SCHEDULE FROM` header; drives calendar open month and `defaultScheduleEnd` calculations.
 - **`pageScheduleEnd`** — set per page from the `TO` date in the header. Fallback: `new Date(today.getFullYear(), today.getMonth() + 1, 1)` (first day of next month relative to today).
 - **`defaultScheduleEnd`** (ranking logic) — derived from `bidPeriodStart`: BP1 lines = `bidPeriodStart + 1 month`, 60-day lines = `bidPeriodStart + 2 months`. Never hardcoded.
-- **`baseYear`** fallback — `new Date().getFullYear()` in both parsers.
+- **`baseYear`** fallback — `new Date().getFullYear()` in both parsers. **Only a fallback** when no `CREW SCHEDULE FROM` header is found.
+- **Date-column years — `colDate()` (v1.16.2, 2026-11-15).** Bidline date columns ("Jan 3") carry no year. `parseBidlineWithPositions()` now resolves every column date (datesOff, trips, earlyArrivalDates) to the year that puts it **closest to `bidPeriodStart`** from the PDF header; `bidPeriodStart` is reset at the start of each parse so a second file in the same session can't inherit the first file's period. **Bug it fixed:** the parser used *today's* year and added one only for "Jan" on a page that also showed "Dec". In the Dec 2026–Jan 2027 bid every January date on a January-only page landed in **Jan 2026** (ORD 747 FO: 640 off days, 151 trip dates); some lines lost their January trips entirely (the page-boundary merge treated the misdated trips as overlapping and discarded them, e.g. 3955 ORD 747 CA). Effect in the live app: a pilot asking for Jan 4–6 off got **0 of 24 qualifying 60-day lines** (89 ranked vs 113 fixed); vacation-slide/training-overlap missed January trips. The Jan–Feb 2027 bid (posted Dec 15) would have dated **every** line a year early. Verified: July/Aug files parse byte-identical to before (167/167 lines); every December difference across all 24 combos is the year correction or a recovered January trip. `bid-file-doctor.js` now errors if any parsed date falls outside [bid start − 7 days, bid start + 3 months] — it reports 795 such dates on the pre-fix parser.
 
 ### Credit PDF Parsing
 

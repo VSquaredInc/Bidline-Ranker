@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.16.1';
+        const APP_VERSION   = '1.16.2';
         // True inside the native iPad app (Capacitor wrapper in ios-app/); false in any browser/PWA.
         const IS_NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
@@ -1944,8 +1944,36 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
             const monthMap = { 'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
                               'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11 };
             
-            // Determine base year from first page (falls back to current year if header parse fails)
+            // Each file defines its own bid period — never reuse one from a file
+            // ranked earlier in the same session (it drives the column years below).
+            bidPeriodStart = null;
+
+            // Fallback year only — used when no "CREW SCHEDULE FROM" header was found.
             let baseYear = new Date().getFullYear();
+
+            // Turn a date-column label (e.g. "Jan", 3) into a full Date. Date columns
+            // carry no year, so pick the year that puts the date closest to the bid
+            // period start read from the PDF header (a bid spans at most two months).
+            // Before v1.16.2 this used *today's* year, adding one only for a "Jan"
+            // column on a page that also showed "Dec" — so in the Dec 2026–Jan 2027
+            // bid every January date on a January-only page landed in Jan 2026
+            // (640 off days / 151 trip dates on ORD 747 FO), and the Jan–Feb 2027 bid
+            // (posted Dec 15) would have dated EVERY line a year early.
+            const colDate = (monName, day, pageCols) => {
+                const mon = monthMap[monName];
+                if (bidPeriodStart) {
+                    const ref = bidPeriodStart.getTime(), y0 = bidPeriodStart.getFullYear();
+                    let best = null;
+                    for (const y of [y0 - 1, y0, y0 + 1]) {
+                        const d = new Date(y, mon, day);
+                        if (!best || Math.abs(d.getTime() - ref) < Math.abs(best.getTime() - ref)) best = d;
+                    }
+                    return best;
+                }
+                let year = baseYear;
+                if (monName === 'Jan' && pageCols && pageCols.some(d => d.month === 'Dec')) year = baseYear + 1;
+                return new Date(year, mon, day);
+            };
             let baseAirport  = 'ORD';
             let aircraftType = '';
             let crewPosition = '';
@@ -2123,12 +2151,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                     }
                                 }
                                 if (closestDate) {
-                                    let year = baseYear;
-                                    if (closestDate.month === 'Jan') {
-                                        const hasDecember = dateColumns.some(d => d.month === 'Dec');
-                                        if (hasDecember) year = baseYear + 1;
-                                    }
-                                    const newDate = new Date(year, monthMap[closestDate.month], closestDate.day);
+                                    const newDate = colDate(closestDate.month, closestDate.day, dateColumns);
                                     if (!datesOff.some(d => d.getTime() === newDate.getTime()))
                                         datesOff.push(newDate);
                                 }
@@ -2302,7 +2325,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             // computed once in colWorkingStatus (which now also treats the column
                             // as off); recorded here too for the vacation-slide "last day" path.
                             if (colWorkingStatus[colIdx].isEarlyArrivalOnly) {
-                                const earlyDate = new Date(baseYear, monthMap[dc.month], dc.day);
+                                const earlyDate = colDate(dc.month, dc.day, dateColumns);
                                 if (!lines[lineNum].earlyArrivalDates.some(d => d.getTime() === earlyDate.getTime())) {
                                     lines[lineNum].earlyArrivalDates.push(earlyDate);
                                 }
@@ -2404,8 +2427,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                 const sDc = sortedDateCols[tripStartIdx];
                                 const eDc = sortedDateCols[i - 1];
                                 pageTrips.push({
-                                    start: new Date(baseYear, monthMap[sDc.month], sDc.day),
-                                    end:   new Date(baseYear, monthMap[eDc.month], eDc.day)
+                                    start: colDate(sDc.month, sDc.day, dateColumns),
+                                    end:   colDate(eDc.month, eDc.day, dateColumns)
                                 });
                                 tripStartIdx = null;
                             }
@@ -2415,8 +2438,8 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             const sDc = sortedDateCols[tripStartIdx];
                             const eDc = sortedDateCols[sortedDateCols.length - 1];
                             pageTrips.push({
-                                start: new Date(baseYear, monthMap[sDc.month], sDc.day),
-                                end:   new Date(baseYear, monthMap[eDc.month], eDc.day)
+                                start: colDate(sDc.month, sDc.day, dateColumns),
+                                end:   colDate(eDc.month, eDc.day, dateColumns)
                             });
                         }
                         // Merge into line data, joining page-boundary trips that are adjacent
