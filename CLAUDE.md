@@ -7,8 +7,8 @@ This file travels with the repo (git + OneDrive) and is read automatically by Cl
 ## Project Identity
 
 **App name:** Bidline Ranker  
-**Current version:** 1.16.2 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
-**Current CACHE_NAME:** `bidline-ranker-v35` (in service-worker.js)  
+**Current version:** 1.16.3 (defined as `APP_VERSION` in ABR.html; displayed in footer at runtime)  
+**Current CACHE_NAME:** `bidline-ranker-v36` (in service-worker.js)  
 **Live URL:** https://vsquaredinc.github.io/Bidline-Ranker/ABR.html  
 **GitHub repo:** https://github.com/VSquaredInc/Bidline-Ranker  
 **Local path:** C:\Users\haine\OneDrive\Christopher\Coding\Bidline  
@@ -229,6 +229,18 @@ Applied identically in `evalVacPosition`, `evalVacContribForPeriod`, and `comput
 - **Back DH (same day):** `* [non-base] [base]` all in one column, next column off, no airports after base.
 - **Back DH (overnight):** `* [non-base]` today, base is first airport in next column, column after next is off.
 - Mid-trip `*` markers must NOT be counted. At most one front DH and one back DH per column.
+
+### Trips & deadheads follow pairings (v1.16.3, 2026-11-15)
+
+Validated against eCrew's actual pairings for all 134 ORD 747 FO lines (Dec 2026): trips now match on **134/134** (was 107), front DH 134/134, back DH 133/134 (the one miss is a ground transfer the PDF prints exactly like a deadhead — see below). Domain rulings (Christopher): **a pairing is one trip**; **a deadhead landing at base before 0700z → that date is a day off**; **ground transfers home are not back deadheads**.
+- **Only an X day ends a trip.** Blank layover columns, pre-0700z landings (even passing through base mid-pairing — 4204 Dec 27), carry-over columns and rest markers stay inside the trip when flying follows; at a trip's edge they are simply not trip days. `colWorkingStatus` exposes `isOff` (not a workday) and `hardOff` (X — ends a trip). Before: any non-working column split the trip (17 lines, e.g. 4142 at its Dec 11 SDF layover).
+- **Repeated flight number on the landing day** (`873 23:40 * ANC` then `873 ANC ORD 5:45`) — a flight number already printed in the previous column is that flight landing, not a new departure, so the 0700z landing-tail rule applies (4184 Jan 31).
+- **Carry-over at base** — a column with no time whose tokens all repeat the previous column and whose location is base (`654 ANC ORD`, bare `ORD` after reserve) is home, not a workday (4113 Jan 2, Reserve 4242–4244 Jan 31). A repeated AWAY location (`ANC`) is a layover and stays a trip day (4151 Dec 17).
+- **Rest marker** `RST.` (+ airports, no time) is not duty (4185 Jan 31).
+- **Page joins** — pages overlap at the month boundary; a trip that runs to one page's edge and one that starts the next page with no X between are the same pairing (gap ≤ 3 days). Before: split (4195, 4202, 4207, 4209).
+- **Back DH** — candidates are counted once per calendar date (the overlapping Jan 1 column was counted twice on 4216), and kept only if the trip ends within ±1 day of the deadhead (overnight DHs land next day; a DH departing before 0700z belongs to the previous day). Deadheading through base mid-pairing is not a back DH. Fixed 4183, 4185, 4211.
+- **Known PDF limit:** ground transfers (`LIMO…^` in eCrew) print as `* RFD ORD` with no flight number — indistinguishable from a deadhead in the PDF, so the PDF path still counts them (4216). The eCrew import excludes them.
+- Regression sweep over 1,319 lines (24 Dec combos + Jul LAX FO + Aug MIA CA): X days unchanged everywhere; changes are only page/layover joins (201 lines), carry-over/rest days trimmed from trip ends (62), lone carry-over "trips" on the last period day removed, and DH corrections (32).
 
 ### hasContent check (prevents 2-letter airline codes from bleeding)
 Content is real only if it matches: airport pattern (3-letter, not in excludeCodes) OR `/^\w{4,}/` (flight numbers) OR `/:\d{2}/` (times) OR `WORK`.

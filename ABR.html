@@ -1543,7 +1543,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
 
         // ── Analytics ────────────────────────────────────────────────────────────
         const ANALYTICS_URL = 'https://script.google.com/macros/s/AKfycbxV6f4wxpqmWBObgdn5sjhliIBJ-0kVIsQ5r4nmzUQs09vR9s_aB8jlRLDRxyCuxo2HAw/exec';
-        const APP_VERSION   = '1.16.2';
+        const APP_VERSION   = '1.16.3';
         // True inside the native iPad app (Capacitor wrapper in ios-app/); false in any browser/PWA.
         const IS_NATIVE_APP = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
@@ -2248,7 +2248,7 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                         // Build per-column working/off status for trip-aware DH detection.
                         // A column is "off" if it contains X or has no meaningful content.
                         // A column is "working" if it has any content other than X or underscores.
-                        const colWorkingStatus = sortedDateCols.map(dc => {
+                        const colWorkingStatus = sortedDateCols.map((dc, ci) => {
                             const colWds = blockWords
                                 .filter(w => Math.abs(w.x - dc.x) < colTolerance)
                                 .sort((a, b) => b.y - a.y || a.x - b.x); // reading order (matches colWords below)
@@ -2282,15 +2282,24 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                             // Nov 1 (bare "ORD 1:20", nothing else) is a true landing-only tail of
                             // the flight that departed CVG Oct 31 23:55.
                             let isEarlyArrivalOnly = false;
+                            let isRepeatOnly = false;
                             if (hasContent && !hasX) {
                                 const timeIdxs = [];
                                 for (let ti = 0; ti < colWds.length; ti++) {
                                     if (/^\d{1,2}:\d{2}$/.test(colWds[ti].text)) timeIdxs.push(ti);
                                 }
+                                // Atlas repeats the flight number on the landing day of an
+                                // overnight flight (4184 ORD 747 FO, Jan 30–31 2027: "873 23:40 * ANC"
+                                // then "873 ANC ORD 5:45"). A flight number already printed in the
+                                // previous column is that same flight landing, not a new departure.
+                                const prevColTexts = ci > 0
+                                    ? blockWords.filter(w => Math.abs(w.x - sortedDateCols[ci - 1].x) < colTolerance).map(w => w.text)
+                                    : [];
                                 const hasFlightOrAircraftCode = colWds.some(w => {
                                     if (w.text.length === 0 || w.text === 'X' || w.text === '*' || /^_+$/.test(w.text)) return false;
                                     if (/^\d{1,2}:\d{2}$/.test(w.text)) return false; // already counted as a time
                                     if (airportPattern.test(w.text)) return false;    // pure 3-letter airport code
+                                    if (prevColTexts.includes(w.text)) return false;  // same flight, landing today
                                     return /\d/.test(w.text);
                                 });
                                 if (timeIdxs.length === 1 && !hasFlightOrAircraftCode) {
@@ -2300,9 +2309,39 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                         isEarlyArrivalOnly = true;
                                     }
                                 }
+                                // Carry-over display AT BASE: no time at all, every token already
+                                // printed in the previous column, and the location shown is base
+                                // (e.g. "654 ANC ORD" the day after flight 654 landed ORD, or a bare
+                                // "ORD" after a reserve day). The pilot is home — not a workday.
+                                // A repeated AWAY location ("ANC") is a layover and stays a trip day
+                                // (4151 Dec 17: at ANC before the 00:05 Dec 18 flight home).
+                                const meaningful = colWds.map(w => w.text).filter(t => t && t !== '*' && !/^_+$/.test(t));
+                                const apts = meaningful.filter(t => airportPattern.test(t) && !excludeCodes.has(t));
+                                if (timeIdxs.length === 0 && ci > 0 && meaningful.length > 0 &&
+                                    meaningful.every(t => prevColTexts.includes(t)) &&
+                                    apts.length > 0 && apts[apts.length - 1] === baseAirport) {
+                                    isRepeatOnly = true;
+                                }
+                                // Rest marker ("RST. ANC ORD", 4185 Jan 31 after a deadhead home):
+                                // rest, not duty. Mid-pairing it stays inside the trip anyway.
+                                if (timeIdxs.length === 0 && meaningful.some(t => /^RST\.?$/.test(t)) &&
+                                    meaningful.every(t => /^RST\.?$/.test(t) || airportPattern.test(t))) {
+                                    isRepeatOnly = true;
+                                }
                             }
 
-                            return { isOff: hasX || !hasContent || isEarlyArrivalOnly, isEarlyArrivalOnly };
+                            return {
+                                isOff: hasX || !hasContent || isEarlyArrivalOnly || isRepeatOnly,
+                                // Deadhead detection keeps its pre-1.16.3 notion of "next day off"
+                                // (carry-over / rest columns count as content there).
+                                isOffForDH: hasX || !hasContent || isEarlyArrivalOnly,
+                                isEarlyArrivalOnly,
+                                // Only an X day ends a trip (v1.16.3). A pairing is ONE trip: blank
+                                // layover columns, pre-0700z landings (even passing through base
+                                // mid-pairing, e.g. 4204 Dec 27) and carry-over columns stay inside it
+                                // when flying follows; at a trip's edge they simply aren't trip days.
+                                hardOff: hasX
+                            };
                         });
 
                         for (let colIdx = 0; colIdx < sortedDateCols.length; colIdx++) {
@@ -2408,47 +2447,63 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                                     }
                                 }
                             }
-                            if (colFrontDH) frontDH++;
-                            if (colBackDH)  backDH++;
+                            // Pages overlap at the month boundary (a December page also prints
+                            // Jan 1–2), so count each deadhead once per calendar date (v1.16.3;
+                            // 4216 ORD 747 FO's Jan 1 deadhead home was counted twice).
+                            const dhSeen = lines[lineNum]._dhSeen || (lines[lineNum]._dhSeen = { f: new Set(), b: new Set() });
+                            const dhKey = colDate(dc.month, dc.day, dateColumns).getTime();
+                            if (colFrontDH && !dhSeen.f.has(dhKey)) { dhSeen.f.add(dhKey); frontDH++; }
+                            if (colBackDH  && !dhSeen.b.has(dhKey)) { dhSeen.b.add(dhKey); backDH++; }
                         }
                         
                         // Accumulate deadhead counts (lines[lineNum] is always initialized with 0)
                         lines[lineNum].frontDH += frontDH;
                         lines[lineNum].backDH += backDH;
 
-                        // Identify trips as contiguous blocks of working date columns
+                        // Identify trips: runs of working columns. A pairing is ONE trip, so
+                        // layover columns (blank, or a pre-0700z landing away from base) between
+                        // working columns stay inside it; only an X day or a landing at base
+                        // before 0700z ends a trip. Before v1.16.3 any non-working column split
+                        // the trip (17 of 134 ORD 747 FO lines, Dec 2026, e.g. 4142 split at its
+                        // Dec 11 SDF layover) — vacation/training conflicts were mis-assessed.
                         const pageTrips = [];
-                        let tripStartIdx = null;
-                        for (let i = 0; i < sortedDateCols.length; i++) {
-                            const working = !colWorkingStatus[i].isOff;
-                            if (working && tripStartIdx === null) {
-                                tripStartIdx = i;
-                            } else if (!working && tripStartIdx !== null) {
-                                const sDc = sortedDateCols[tripStartIdx];
-                                const eDc = sortedDateCols[i - 1];
-                                pageTrips.push({
-                                    start: colDate(sDc.month, sDc.day, dateColumns),
-                                    end:   colDate(eDc.month, eDc.day, dateColumns)
-                                });
-                                tripStartIdx = null;
-                            }
-                        }
-                        // Handle a trip that runs to the end of this page's date range
-                        if (tripStartIdx !== null) {
+                        let tripStartIdx = null, lastWorkIdx = null, seenHardOff = false;
+                        const closeTrip = (openEnd) => {
                             const sDc = sortedDateCols[tripStartIdx];
-                            const eDc = sortedDateCols[sortedDateCols.length - 1];
+                            const eDc = sortedDateCols[lastWorkIdx];
                             pageTrips.push({
                                 start: colDate(sDc.month, sDc.day, dateColumns),
-                                end:   colDate(eDc.month, eDc.day, dateColumns)
+                                end:   colDate(eDc.month, eDc.day, dateColumns),
+                                // no X day between the page edge and the trip → may continue across pages
+                                openStart: pageTrips.length === 0 && !seenHardOff,
+                                openEnd
                             });
+                            tripStartIdx = null;
+                            lastWorkIdx = null;
+                        };
+                        for (let i = 0; i < sortedDateCols.length; i++) {
+                            const st = colWorkingStatus[i];
+                            if (!st.isOff) {
+                                if (tripStartIdx === null) tripStartIdx = i;
+                                lastWorkIdx = i;
+                            } else if (st.hardOff) {
+                                if (tripStartIdx !== null) closeTrip(false);
+                                seenHardOff = true;
+                            }
+                            // other off columns (layover / carry-over): neither start nor end a trip
                         }
-                        // Merge into line data, joining page-boundary trips that are adjacent
+                        // A trip still open at the page edge ends at its last working column
+                        if (tripStartIdx !== null) closeTrip(true);
+                        // Merge into line data. A trip that ran to the end of one page and one
+                        // that starts the next page with no X day in between are the same
+                        // pairing (4195 ORD 747 FO: Dec 22–Jan 1 + Jan 2–5 is one trip).
                         for (const pt of pageTrips) {
                             const existing = lines[lineNum].trips;
                             const prev = existing.length > 0 ? existing[existing.length - 1] : null;
-                            // If this trip starts on the same day the previous one ended, extend it
-                            if (prev && pt.start <= prev.end) {
+                            const gapDays = prev ? Math.round((pt.start - prev.end) / 86400000) : null;
+                            if (prev && (pt.start <= prev.end || (prev.openEnd && pt.openStart && gapDays <= 3))) {
                                 if (pt.end > prev.end) prev.end = pt.end;
+                                prev.openEnd = pt.openEnd;
                             } else {
                                 existing.push(pt);
                             }
@@ -2456,6 +2511,23 @@ Effective Value = Base Value + Airport Bonus − Airport Penalty
                     }
                 }
             
+            // A back deadhead is the deadhead home that ENDS a trip. Now that trips follow
+            // pairings (v1.16.3), drop candidates whose trip carries on — deadheading
+            // through base mid-pairing (4204 ORD 747 FO, Dec 27) is not a back DH.
+            // The DH's column can sit a day either side of the trip's last day: an overnight
+            // DH lands the next day (trip may end day+1), and a DH departing before 0700z
+            // belongs to the previous day (4135: DL1139 ATL–ORD 00:39 Dec 15 ends the
+            // Dec 5–14 trip). Mid-pairing DHs sit well inside their trip and are dropped.
+            for (const L of Object.values(lines)) {
+                if (!L._dhSeen) continue;
+                const endsTrip = k => L.trips.some(t => {
+                    const d = Math.round((t.end.getTime() - k) / 86400000);
+                    return d >= -1 && d <= 1;
+                });
+                L.backDH = [...L._dhSeen.b].filter(endsTrip).length;
+                delete L._dhSeen;
+            }
+
             return { lines, meta: { baseAirport, aircraftType, crewPosition } };
         }
 

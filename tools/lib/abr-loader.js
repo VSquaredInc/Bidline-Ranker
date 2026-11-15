@@ -97,4 +97,4 @@ function fileFromBuffer(name, buffer) {
   };
 }
 
-module.exports = { loadAbrParsers, readAppVersion, fileFromPath, fileFromBuffer, REQUIRED_FNS };
+module.exports = { loadAbrParsers, readAppVersion, fileFromPath, fileFromBuffer, extractFunctionSource, REQUIRED_FNS };
